@@ -1,0 +1,16 @@
+Back: python -m uvicorn main:app --reload
+
+Front: npm run dev
+
+---------------------------------------------------------
+
+
+
+---------------------------------------------------------
+
+Comando ultilizados para instalacao:
+pip install fastapi uvicorn sqlalchemy pydantic
+pip install pytest httpx
+npm install axios
+npm install react-big-calendar date-fns
+pip install apscheduler

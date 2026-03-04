@@ -10,6 +10,7 @@ function App() {
     // Controles de estado para o Menu e para a Tela Atual
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [currentView, setCurrentView] = useState('cadastro'); // 'cadastro', 'lista', 'testes'
+    const [testStatus, setTestStatus] = useState('pendente'); // 'pendente', 'sucesso', 'falha'
 
     const fetchAppointments = async () => {
         try {
@@ -75,10 +76,63 @@ function App() {
 
                     {currentView === 'testes' && (
                         <div>
-                            <h1 style={{marginBottom: '20px'}}>Automação de Testes (CI)</h1>
-                            <p>O pipeline de testes automatizados do backend será exibido aqui.</p>
-                            <div style={{padding: '15px', backgroundColor: '#fff3cd', color: '#856404', borderRadius: '5px', marginTop: '10px'}}>
-                                Aguardando execução do pytest no backend...
+                            <div className="dashboard-header">
+                                <h1>Automação de Testes (CI)</h1>
+                                {testStatus === 'pendente' && <div className="status-badge pendente">⏳ Status: Aguardando Execução</div>}
+                                {testStatus === 'sucesso' && <div className="status-badge sucesso">✅ Status: Todos os testes passaram!</div>}
+                                {testStatus === 'falha' && <div className="status-badge falha">❌ Status: Falha nos testes</div>}
+                            </div>
+                            
+                            <p style={{ color: '#666', marginBottom: '20px' }}>
+                                Validação contínua do Backend (FastAPI). Clique no botão abaixo para capturar o último log gerado pelo Pytest.
+                            </p>
+                            
+                            <button 
+                                onClick={async () => {
+                                    // Mostra que está carregando...
+                                    setTestStatus('pendente');
+                                    document.getElementById('terminal-testes').innerText = "Iniciando pipeline de testes no servidor...\nExecutando pytest...";
+                                    
+                                    try {
+                                        // Chama a nossa rota nova do FastAPI ao invés do .txt
+                                        const response = await api.get('/api/run-tests');
+                                        const logTexto = response.data.log;
+                                        
+                                        document.getElementById('terminal-testes').innerText = logTexto;
+                                        
+                                        // Nova lógica à prova de falhas: procura pela palavra exata de falha do pytest
+                                        if (logTexto.includes('FAILED') || logTexto.includes('ERRORS')) {
+                                            setTestStatus('falha');
+                                        } else if (logTexto.includes('passed')) {
+                                            setTestStatus('sucesso');
+                                        } else {
+                                            setTestStatus('pendente');
+                                        }
+                                        
+                                        // Se os testes passaram e criaram um novo cadastro, já atualiza a lista de agendamentos!
+                                        fetchAppointments();
+                                        
+                                    } catch (e) {
+                                        console.error("Erro na integração", e);
+                                        document.getElementById('terminal-testes').innerText = "Falha ao conectar com o Backend.";
+                                        setTestStatus('falha');
+                                    }
+                                }}
+                                style={{ padding: '10px 20px', backgroundColor: '#007BFF', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}
+                            >
+                                🔄 Atualizar Log de Testes
+                            </button>
+
+                            <div className="terminal-container">
+                                <div className="terminal-header">
+                                    <div className="terminal-dot dot-red"></div>
+                                    <div className="terminal-dot dot-yellow"></div>
+                                    <div className="terminal-dot dot-green"></div>
+                                    <span className="terminal-title">bash — pytest -v</span>
+                                </div>
+                                <pre id="terminal-testes" className="terminal-body">
+                                    Aguardando carregamento dos logs...
+                                </pre>
                             </div>
                         </div>
                     )}

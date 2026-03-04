@@ -96,6 +96,94 @@ body {
   padding: 30px;
   border-radius: 8px;
   box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-  max-width: 800px;
+  max-width: 950px; 
   margin: 0 auto;
+}
+
+/* --- ESTILOS DO DASHBOARD DE TESTES --- */
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.status-badge {
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-weight: bold;
+  font-size: 0.9rem;
+  color: white;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.status-badge.sucesso { background-color: #2ecc71; }
+.status-badge.falha { background-color: #e74c3c; }
+.status-badge.pendente { background-color: #95a5a6; }
+
+.terminal-container {
+  background-color: #1e1e1e;
+  border-radius: 8px;
+  box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+  overflow: hidden;
+  margin-top: 20px;
+}
+
+.terminal-header {
+  background-color: #2d2d2d;
+  padding: 10px 15px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  border-bottom: 1px solid #444;
+}
+
+.terminal-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+.dot-red { background-color: #ff5f56; }
+.dot-yellow { background-color: #ffbd2e; }
+.dot-green { background-color: #27c93f; }
+
+.terminal-title {
+  color: #a0a0a0;
+  font-size: 0.85rem;
+  margin-left: 10px;
+  font-family: monospace;
+}
+
+.terminal-body {
+  padding: 20px;
+  background-color: #1e1e1e;
+  color: #00ff00;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 1rem; 
+  line-height: 1.5;
+  overflow-x: auto;
+  min-height: 400px; 
+  max-height: 65vh; 
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+
+.rbc-calendar {
+  font-family: inherit;
+}
+.rbc-toolbar button {
+  color: #2c3e50;
+  border-radius: 4px;
+}
+.rbc-toolbar button.rbc-active {
+  background-color: #3498db;
+  color: white;
+  border-color: #3498db;
+}
+.rbc-event {
+  background-color: #3498db;
+  border-radius: 4px;
 }

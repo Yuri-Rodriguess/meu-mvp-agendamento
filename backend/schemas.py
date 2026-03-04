@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from datetime import datetime
 
 class AppointmentCreate(BaseModel):
@@ -8,6 +8,5 @@ class AppointmentCreate(BaseModel):
 
 class AppointmentResponse(AppointmentCreate):
     id: int
-
-    class Config:
-        from_attributes = True
+    
+    model_config = ConfigDict(from_attributes=True)
