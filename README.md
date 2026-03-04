@@ -23,8 +23,3 @@ O projeto foi construído utilizando uma arquitetura moderna cliente-servidor:
 ## ⚙️ Como executar o projeto localmente
 
 Para rodar o sistema, você precisará ter o **Node.js** e o **Python 3+** instalados na sua máquina.
-
-### 1. Clonar o repositório
-```bash
-git clone [https://github.com/SEU_USUARIO/meu-mvp-agendamento.git](https://github.com/SEU_USUARIO/meu-mvp-agendamento.git)
-cd meu-mvp-agendamento
