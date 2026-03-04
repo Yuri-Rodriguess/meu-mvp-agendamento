@@ -23,3 +23,34 @@ O projeto foi construído utilizando uma arquitetura moderna cliente-servidor:
 ## ⚙️ Como executar o projeto localmente
 
 Para rodar o sistema, você precisará ter o **Node.js** e o **Python 3+** instalados na sua máquina.
+
+O sistema é dividido em duas partes que devem rodar simultaneamente.
+
+# 1. Clonar o repositório
+git clone https://github.com/SEU_USUARIO/meu-mvp-agendamento.git
+cd meu-mvp-agendamento
+
+# 2. Rodar o Backend (FastAPI)
+Abra um terminal e acesse a pasta do backend:
+
+cd backend
+
+Para instalar as dependências necessárias: 
+pip install fastapi uvicorn sqlalchemy pydantic pytest httpx apscheduler 
+
+Para iniciar o servidor de desenvolvimento: 
+python -m uvicorn main:app --reload 
+
+
+# 💡 Importante: A documentação automática da API (Swagger UI) ficará disponível em: http://127.0.0.1:8000/docs
+
+# 3. Rodar o Frontend (React)
+Abra um segundo terminal e acesse a pasta do frontend:
+
+cd frontend
+
+Para instalar as dependências do Node.js: 
+npm install  
+
+Para iniciar a interface de usuário: 
+npm run dev  
