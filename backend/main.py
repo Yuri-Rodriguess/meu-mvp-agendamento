@@ -1,11 +1,14 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from passlib.context import CryptContext
+from jose import JWTError, jwt
+from datetime import datetime, timedelta, timezone
 import subprocess
 import sys
 from contextlib import asynccontextmanager
 from apscheduler.schedulers.background import BackgroundScheduler
-from datetime import datetime
 
 import models
 import schemas
@@ -43,14 +46,6 @@ async def lifespan(app: FastAPI):
 # Adicionamos o lifespan aqui na criação do app
 app = FastAPI(title="MVP Agendamento Online", lifespan=lifespan)
 
-# Configuração de CORS para permitir que o React converse com o FastAPI
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"], 
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 # Dependência para pegar a sessão do banco
 def get_db():
     db = SessionLocal()
@@ -59,8 +54,75 @@ def get_db():
     finally:
         db.close()
 
+SECRET_KEY = "chave-super-secreta-do-mvp-agendamento"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+
+def get_password_hash(password):
+    return pwd_context.hash(password)
+
+def verify_password(plain_password, hashed_password):
+    return pwd_context.verify(plain_password, hashed_password)
+
+def create_access_token(data: dict):
+    to_encode = data.copy()
+    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+# Função que verifica se o usuário está logado em cada requisição
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Credenciais inválidas",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+    user = db.query(models.UserDB).filter(models.UserDB.username == username).first()
+    if user is None:
+        raise credentials_exception
+    return user
+
+# --- ROTAS DE AUTENTICAÇÃO ---
+@app.post("/register")
+def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
+    user_exists = db.query(models.UserDB).filter(models.UserDB.username == user.username).first()
+    if user_exists:
+        raise HTTPException(status_code=400, detail="Usuário já existe")
+    hashed_pw = get_password_hash(user.password)
+    new_user = models.UserDB(username=user.username, hashed_password=hashed_pw)
+    db.add(new_user)
+    db.commit()
+    return {"message": "Usuário criado com sucesso!"}
+
+@app.post("/login", response_model=schemas.Token)
+def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    user = db.query(models.UserDB).filter(models.UserDB.username == form_data.username).first()
+    if not user or not verify_password(form_data.password, user.hashed_password):
+        raise HTTPException(status_code=400, detail="Usuário ou senha incorretos")
+    
+    access_token = create_access_token(data={"sub": user.username})
+    return {"access_token": access_token, "token_type": "bearer"}
+
+# Configuração de CORS para permitir que o React converse com o FastAPI
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], 
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 @app.post("/appointments/", response_model=schemas.AppointmentResponse)
-def create_appointment(appointment: schemas.AppointmentCreate, db: Session = Depends(get_db)):
+def create_appointment(appointment: schemas.AppointmentCreate, db: Session = Depends(get_db), current_user: models.UserDB = Depends(get_current_user)):
     db_appointment = models.AppointmentDB(**appointment.model_dump())
     db.add(db_appointment)
     db.commit()
@@ -68,11 +130,11 @@ def create_appointment(appointment: schemas.AppointmentCreate, db: Session = Dep
     return db_appointment
 
 @app.get("/appointments/", response_model=list[schemas.AppointmentResponse])
-def list_appointments(db: Session = Depends(get_db)):
+def list_appointments(db: Session = Depends(get_db), current_user: models.UserDB = Depends(get_current_user)):
     return db.query(models.AppointmentDB).all()
 
 @app.delete("/appointments/{appointment_id}")
-def delete_appointment(appointment_id: int, db: Session = Depends(get_db)):
+def delete_appointment(appointment_id: int, db: Session = Depends(get_db), current_user: models.UserDB = Depends(get_current_user)):
     db_appointment = db.query(models.AppointmentDB).filter(models.AppointmentDB.id == appointment_id).first()
     if not db_appointment:
         raise HTTPException(status_code=404, detail="Agendamento não encontrado")

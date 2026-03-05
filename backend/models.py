@@ -8,3 +8,9 @@ class AppointmentDB(Base):
     client_name = Column(String, index=True)
     service = Column(String)
     date_time = Column(DateTime)
+
+class UserDB(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, unique=True, index=True)
+    hashed_password = Column(String)

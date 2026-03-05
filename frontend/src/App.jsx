@@ -2,30 +2,41 @@ import React, { useState, useEffect } from 'react';
 import api from './services/api';
 import AppointmentForm from './components/AppointmentForm';
 import AppointmentList from './components/AppointmentList';
-import './App.css'; // Importando o nosso novo visual!
+import Login from './components/Login';
+import './App.css';
 
 function App() {
+    // 1. TODOS OS ESTADOS DEVEM FICAR AQUI NO TOPO (Regra do React)
+    const [token, setToken] = useState(localStorage.getItem('token'));
     const [appointments, setAppointments] = useState([]);
-    
-    // Controles de estado para o Menu e para a Tela Atual
     const [isMenuOpen, setIsMenuOpen] = useState(false);
-    const [currentView, setCurrentView] = useState('cadastro'); // 'cadastro', 'lista', 'testes'
-    const [testStatus, setTestStatus] = useState('pendente'); // 'pendente', 'sucesso', 'falha'
+    const [currentView, setCurrentView] = useState('cadastro');
+    const [testStatus, setTestStatus] = useState('pendente');
+
+    // 2. FUNÇÕES DE LÓGICA
+    const handleLogout = () => {
+        localStorage.removeItem('token');
+        setToken(null);
+    };
 
     const fetchAppointments = async () => {
+        if (!token) return; // Só busca se tiver token
         try {
             const response = await api.get('/appointments/');
             setAppointments(response.data);
         } catch (error) {
             console.error("Erro ao buscar agendamentos", error);
+            // Se o token estiver vencido ou inválido, desloga automaticamente
+            if (error.response && error.response.status === 401) {
+                handleLogout();
+            }
         }
     };
 
     useEffect(() => {
         fetchAppointments();
-    }, []);
+    }, [token]); // Atualiza sempre que o token mudar
 
-    // Função auxiliar para trocar de tela e fechar o menu no celular
     const handleMenuClick = (view) => {
         setCurrentView(view);
         if (window.innerWidth < 768) {
@@ -33,6 +44,12 @@ function App() {
         }
     };
 
+    // 3. TRAVA DE SEGURANÇA: Deve vir ANTES do visual e DEPOIS dos Hooks
+    if (!token) {
+        return <Login setToken={setToken} />;
+    }
+
+    // 4. VISUAL PRINCIPAL (O DASHBOARD)
     return (
         <div className="app-container">
             {/* --- MENU LATERAL --- */}
@@ -49,6 +66,9 @@ function App() {
                     <li className={currentView === 'testes' ? 'active' : ''} onClick={() => handleMenuClick('testes')}>
                         ⚙️ Resultados de Testes
                     </li>
+                    <li onClick={handleLogout} style={{ color: '#e74c3c', marginTop: '20px', fontWeight: 'bold' }}>
+                        🚪 Sair do Sistema
+                    </li>
                 </ul>
             </div>
 
@@ -59,7 +79,6 @@ function App() {
                 </button>
 
                 <div className="content-card">
-                    {/* Renderização Condicional: Mostra apenas a tela selecionada */}
                     {currentView === 'cadastro' && (
                         <div>
                             <h1 style={{marginBottom: '20px'}}>Agendar Horário</h1>
@@ -89,18 +108,15 @@ function App() {
                             
                             <button 
                                 onClick={async () => {
-                                    // Mostra que está carregando...
                                     setTestStatus('pendente');
                                     document.getElementById('terminal-testes').innerText = "Iniciando pipeline de testes no servidor...\nExecutando pytest...";
                                     
                                     try {
-                                        // Chama a nossa rota nova do FastAPI ao invés do .txt
                                         const response = await api.get('/api/run-tests');
                                         const logTexto = response.data.log;
                                         
                                         document.getElementById('terminal-testes').innerText = logTexto;
                                         
-                                        // Nova lógica à prova de falhas: procura pela palavra exata de falha do pytest
                                         if (logTexto.includes('FAILED') || logTexto.includes('ERRORS')) {
                                             setTestStatus('falha');
                                         } else if (logTexto.includes('passed')) {
@@ -109,7 +125,6 @@ function App() {
                                             setTestStatus('pendente');
                                         }
                                         
-                                        // Se os testes passaram e criaram um novo cadastro, já atualiza a lista de agendamentos!
                                         fetchAppointments();
                                         
                                     } catch (e) {
