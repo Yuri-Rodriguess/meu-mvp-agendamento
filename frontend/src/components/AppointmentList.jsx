@@ -3,12 +3,10 @@ import api from '../services/api';
 import { Calendar, dateFnsLocalizer } from 'react-big-calendar';
 import { format, parse, startOfWeek, getDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { toast } from 'react-toastify'; // Importando o Toast
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 
-// Configurando o calendário para o idioma Português (Brasil)
-const locales = {
-  'pt-BR': ptBR,
-};
+const locales = { 'pt-BR': ptBR };
 
 const localizer = dateFnsLocalizer({
   format,
@@ -18,7 +16,6 @@ const localizer = dateFnsLocalizer({
   locales,
 });
 
-// --- NOVA BARRA DE FERRAMENTAS CUSTOMIZADA COM DROPDOWN ---
 const CustomToolbar = (toolbar) => {
     const goToBack = () => { toolbar.onNavigate('PREV'); };
     const goToNext = () => { toolbar.onNavigate('NEXT'); };
@@ -28,8 +25,6 @@ const CustomToolbar = (toolbar) => {
         "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
         "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
     ];
-
-    // Anos disponíveis no dropdown (você pode aumentar essa lista)
     const anos = [2024, 2025, 2026, 2027, 2028, 2029];
 
     const handleMesChange = (event) => {
@@ -51,30 +46,14 @@ const CustomToolbar = (toolbar) => {
                 <button type="button" onClick={goToBack}>Anterior</button>
                 <button type="button" onClick={goToNext}>Próximo</button>
             </span>
-            
-            {/* O SEGREDO ESTÁ AQUI: Dropdowns de Mês e Ano */}
             <span className="rbc-toolbar-label" style={{ display: 'flex', gap: '10px', justifyContent: 'center', alignItems: 'center' }}>
-                <select 
-                    value={toolbar.date.getMonth()} 
-                    onChange={handleMesChange}
-                    style={{ padding: '6px 10px', borderRadius: '4px', border: '1px solid #ccc', fontSize: '1rem', cursor: 'pointer', backgroundColor: 'white' }}
-                >
-                    {meses.map((mes, index) => (
-                        <option key={index} value={index}>{mes}</option>
-                    ))}
+                <select value={toolbar.date.getMonth()} onChange={handleMesChange} style={{ padding: '6px 10px', borderRadius: '4px', border: '1px solid #ccc' }}>
+                    {meses.map((mes, index) => <option key={index} value={index}>{mes}</option>)}
                 </select>
-
-                <select 
-                    value={toolbar.date.getFullYear()} 
-                    onChange={handleAnoChange}
-                    style={{ padding: '6px 10px', borderRadius: '4px', border: '1px solid #ccc', fontSize: '1rem', cursor: 'pointer', backgroundColor: 'white' }}
-                >
-                    {anos.map((ano) => (
-                        <option key={ano} value={ano}>{ano}</option>
-                    ))}
+                <select value={toolbar.date.getFullYear()} onChange={handleAnoChange} style={{ padding: '6px 10px', borderRadius: '4px', border: '1px solid #ccc' }}>
+                    {anos.map((ano) => <option key={ano} value={ano}>{ano}</option>)}
                 </select>
             </span>
-
             <span className="rbc-btn-group">
                 <button type="button" className={toolbar.view === 'month' ? 'rbc-active' : ''} onClick={() => toolbar.onView('month')}>Mês</button>
                 <button type="button" className={toolbar.view === 'week' ? 'rbc-active' : ''} onClick={() => toolbar.onView('week')}>Semana</button>
@@ -86,39 +65,64 @@ const CustomToolbar = (toolbar) => {
 };
 
 export default function AppointmentList({ appointments, onAppointmentDeleted }) {
-    
     const [currentDate, setCurrentDate] = useState(new Date());
     const [currentView, setCurrentView] = useState('month');
+    
+    // --- ESTADOS DO MODAL DE EXCLUSÃO ---
+    const [showModal, setShowModal] = useState(false);
+    const [eventToDelete, setEventToDelete] = useState(null);
 
-    // Converte os dados do nosso banco (FastAPI) para o formato que o Calendário entende
     const calendarEvents = appointments.map((appt) => {
         const dataAgendamento = new Date(appt.date_time);
         return {
             id: appt.id,
             title: `${appt.client_name} - ${appt.service}`,
             start: dataAgendamento,
-            end: new Date(dataAgendamento.getTime() + 60 * 60 * 1000), // Duração de 1 hora
+            end: new Date(dataAgendamento.getTime() + 60 * 60 * 1000),
             resource: appt
         };
     });
 
-    const handleSelectEvent = async (event) => {
-        const confirmar = window.confirm(`Deseja cancelar o agendamento de:\n${event.title}?`);
-        if (confirmar) {
-            try {
-                await api.delete(`/appointments/${event.id}`);
-                onAppointmentDeleted(); // Atualiza a tela
-                alert("Agendamento cancelado com sucesso!");
-            } catch (error) {
-                console.error("Erro ao deletar agendamento", error);
-                alert("Erro ao cancelar o agendamento.");
-            }
+    // Ao invés de deletar na hora, apenas abre o modal e guarda o evento
+    const handleSelectEvent = (event) => {
+        setEventToDelete(event);
+        setShowModal(true);
+    };
+
+    // Função que realmente vai no banco e deleta
+    const confirmDelete = async () => {
+        if (!eventToDelete) return;
+        
+        try {
+            await api.delete(`/appointments/${eventToDelete.id}`);
+            onAppointmentDeleted(); 
+            toast.success("Agendamento cancelado com sucesso!"); // Toast animado!
+        } catch (error) {
+            console.error("Erro ao deletar agendamento", error);
+            toast.error("Erro ao cancelar o agendamento.");
+        } finally {
+            // Fecha o modal e limpa a seleção independentemente de dar erro ou sucesso
+            setShowModal(false);
+            setEventToDelete(null);
         }
     };
 
     return (
-        <div>
-            {/* --- VISUALIZAÇÃO EM CALENDÁRIO --- */}
+        <div style={{ position: 'relative' }}>
+            {/* --- O MODAL CUSTOMIZADO --- */}
+            {showModal && (
+                <div className="modal-overlay">
+                    <div className="modal-content">
+                        <h3>⚠️ Cancelar Agendamento?</h3>
+                        <p>Você tem certeza que deseja cancelar o agendamento de:<br/> <strong>{eventToDelete?.title}</strong>?</p>
+                        <div className="modal-actions">
+                            <button className="btn-cancel" onClick={() => setShowModal(false)}>Voltar</button>
+                            <button className="btn-confirm" onClick={confirmDelete}>Sim, Cancelar</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <div style={{ height: '500px', marginBottom: '40px', backgroundColor: 'white', padding: '15px', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
                 <Calendar
                     localizer={localizer}
@@ -126,10 +130,7 @@ export default function AppointmentList({ appointments, onAppointmentDeleted }) 
                     startAccessor="start"
                     endAccessor="end"
                     culture="pt-BR"
-                    // --- SUBSTITUINDO A BARRA PADRÃO PELA NOSSA BARRA CUSTOMIZADA ---
-                    components={{
-                        toolbar: CustomToolbar
-                    }}
+                    components={{ toolbar: CustomToolbar }}
                     date={currentDate}
                     onNavigate={(newDate) => setCurrentDate(newDate)}
                     view={currentView}
@@ -139,7 +140,6 @@ export default function AppointmentList({ appointments, onAppointmentDeleted }) 
                 />
             </div>
 
-            {/* --- LISTA TRADICIONAL --- */}
             <h3 style={{ borderBottom: '2px solid #eee', paddingBottom: '10px', marginBottom: '15px' }}>Lista Detalhada</h3>
             {appointments.length === 0 ? (
                 <p>Nenhum agendamento encontrado.</p>
