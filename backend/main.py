@@ -155,3 +155,30 @@ def rodar_testes_automatizados():
         return {"log": result.stdout + result.stderr}
     except Exception as e:
         return {"log": f"Erro crítico ao executar pipeline: {str(e)}"}
+    
+@app.get("/users/", response_model=list[schemas.UserResponse])
+def list_users(db: Session = Depends(get_db), current_user: models.UserDB = Depends(get_current_user)):
+    """Lista todos os administradores cadastrados no sistema (Rota Protegida)"""
+    return db.query(models.UserDB).all()
+
+@app.delete("/users/{user_id}")
+def delete_user(user_id: int, db: Session = Depends(get_db), current_user: models.UserDB = Depends(get_current_user)):
+    """Rota protegida: Apenas o super admin 'Yuri' pode deletar contas"""
+    
+    # 1. A Trava de Segurança (God Mode)
+    if current_user.username.lower() != "yuri":
+        raise HTTPException(status_code=403, detail="Acesso Negado: Apenas o administrador Yuri tem permissão para deletar usuários.")
+    
+    # 2. Busca o usuário que será deletado
+    user_to_delete = db.query(models.UserDB).filter(models.UserDB.id == user_id).first()
+    if not user_to_delete:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado.")
+        
+    # 3. Proteção extra: Yuri não pode deletar a si mesmo sem querer
+    if user_to_delete.id == current_user.id:
+        raise HTTPException(status_code=400, detail="Você não pode deletar a sua própria conta de Super Administrador.")
+        
+    # 4. Executa a deleção
+    db.delete(user_to_delete)
+    db.commit()
+    return {"message": "Administrador removido com sucesso"}

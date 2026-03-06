@@ -18,3 +18,10 @@ class UserCreate(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
+
+class UserResponse(BaseModel):
+    id: int
+    username: str
+    
+    # Permite ler direto do banco de dados (SQLAlchemy)
+    model_config = ConfigDict(from_attributes=True)

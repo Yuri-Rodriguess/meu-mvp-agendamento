@@ -4,16 +4,16 @@ import AppointmentForm from './components/AppointmentForm';
 import AppointmentList from './components/AppointmentList';
 import Login from './components/Login';
 import './App.css';
+import UserList from './components/UserList';
 
 function App() {
-    // 1. TODOS OS ESTADOS DEVEM FICAR AQUI NO TOPO (Regra do React)
+
     const [token, setToken] = useState(localStorage.getItem('token'));
     const [appointments, setAppointments] = useState([]);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [currentView, setCurrentView] = useState('cadastro');
     const [testStatus, setTestStatus] = useState('pendente');
 
-    // 2. FUNÇÕES DE LÓGICA
     const handleLogout = () => {
         localStorage.removeItem('token');
         setToken(null);
@@ -44,12 +44,10 @@ function App() {
         }
     };
 
-    // 3. TRAVA DE SEGURANÇA: Deve vir ANTES do visual e DEPOIS dos Hooks
     if (!token) {
         return <Login setToken={setToken} />;
     }
 
-    // 4. VISUAL PRINCIPAL (O DASHBOARD)
     return (
         <div className="app-container">
             {/* --- MENU LATERAL --- */}
@@ -68,6 +66,9 @@ function App() {
                     </li>
                     <li onClick={handleLogout} style={{ color: '#e74c3c', marginTop: '20px', fontWeight: 'bold' }}>
                         🚪 Sair do Sistema
+                    </li>
+                    <li className={currentView === 'usuarios' ? 'active' : ''} onClick={() => handleMenuClick('usuarios')}>
+                        👥 Administradores
                     </li>
                 </ul>
             </div>
@@ -149,6 +150,13 @@ function App() {
                                     Aguardando carregamento dos logs...
                                 </pre>
                             </div>
+                        </div>
+                    )}
+                    {currentView === 'usuarios' && (
+                        <div>
+                            <h1 style={{marginBottom: '20px'}}>Gestão de Acesso</h1>
+                            <p style={{ color: '#666' }}>Visualize as contas com permissão de administrador no painel.</p>
+                            <UserList />
                         </div>
                     )}
                 </div>
