@@ -1,5 +1,7 @@
 # 📅 MVP - Sistema de Agendamento Online
 
+[![CI](https://github.com/Yuri-Rodriguess/meu-mvp-agendamento/actions/workflows/ci.yml/badge.svg)](https://github.com/Yuri-Rodriguess/meu-mvp-agendamento/actions/workflows/ci.yml)
+
 Este projeto é um Produto Mínimo Viável (MVP) desenvolvido como trabalho prático para a disciplina de Fábrica de Software com Gestão Ágil. O objetivo é simular um ambiente real de desenvolvimento ágil, entregando valor rapidamente através de um ciclo curto (Sprint de 4 dias).
 
 ## 🚀 Proposta de Valor
@@ -17,6 +19,7 @@ O projeto foi construído utilizando uma arquitetura moderna cliente-servidor:
 - [x] **Visualização Avançada:** Calendário interativo mensal/semanal (estilo Google Calendar) com filtros dinâmicos.
 - [x] **Dashboard de CI/CD:** Tela dedicada no frontend que aciona e exibe logs do Pytest rodando no servidor em tempo real.
 - [x] **Rotina Autônoma (Background Task):** Agendador interno (APScheduler) configurado para executar testes automáticos de integridade todos os dias às 22h.
+- [x] **CI real (GitHub Actions):** todo push/PR roda o Pytest do backend e o lint + testes + build do frontend automaticamente — o dashboard e o agendador continuam existindo, mas quem garante que a branch está saudável agora é o CI, não um clique manual.
 
 ---
 
@@ -79,6 +82,21 @@ Sempre que mudar um model em `backend/models.py`, gere uma nova migration em vez
 alembic revision --autogenerate -m "descreva a mudança aqui"
 alembic upgrade head
 Revise o arquivo gerado em `backend/alembic/versions/` antes de commitar — o autogenerate nem sempre acerta 100% (ex.: renomear uma coluna vira "remover + adicionar" por padrão).
+
+## ☁️ Publicando em produção (deploy)
+
+O projeto ainda não está publicado — isso exige criar contas em serviços de hospedagem, o que só você pode fazer. Um caminho simples e gratuito para começar:
+
+**Backend (FastAPI) — Render ou Railway:**
+1. Crie um "Web Service" apontando para a pasta `backend/` deste repositório.
+2. Build command: `pip install -r requirements.txt`
+3. Start command: `alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port $PORT`
+4. Configure as variáveis de ambiente do `backend/.env.example` (gere valores novos de `SECRET_KEY`/`TEST_RUNNER_API_KEY` — nunca reaproveite os de desenvolvimento) e ajuste `ALLOWED_ORIGINS` para a URL do frontend publicado.
+5. **Atenção:** SQLite grava num arquivo local no disco do servidor. Na maioria dessas plataformas o disco não é persistente entre deploys (o banco "reseta"), a menos que você contrate um disco persistente/volume — pesquise a opção específica da plataforma escolhida, ou migre para Postgres (a própria Render/Railway oferecem um banco gerenciado) se quiser persistência de verdade sem depender de disco.
+
+**Frontend (React/Vite) — Vercel ou Netlify:**
+1. Aponte para a pasta `frontend/`, com build command `npm run build` e diretório de saída `dist`.
+2. Configure `VITE_API_URL` (URL do backend publicado) e `VITE_TEST_RUNNER_API_KEY` (mesmo valor do backend) nas variáveis de ambiente da plataforma.
 
 ## 🔒 Notas de segurança
 
