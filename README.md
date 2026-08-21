@@ -84,3 +84,4 @@ Revise o arquivo gerado em `backend/alembic/versions/` antes de commitar — o a
 - O CORS agora é restrito às origens listadas em `ALLOWED_ORIGINS` (por padrão, apenas `http://localhost:5173`). Ajuste essa variável ao publicar o frontend em outro domínio.
 - Cada agendamento pertence ao usuário que o criou (`owner_id`); a listagem e o cancelamento só enxergam agendamentos da própria conta.
 - Os testes automatizados (`pytest`) rodam contra um banco SQLite isolado (`test_agendamento.db`), não contra `agendamento.db` — assim o pipeline de CI não insere dados fictícios no banco real.
+- `/login` e `/register` têm rate limiting por IP (10 e 5 requisições por minuto, respectivamente), para dificultar ataques de força bruta contra senha. Ao estourar o limite, a API responde `429`.

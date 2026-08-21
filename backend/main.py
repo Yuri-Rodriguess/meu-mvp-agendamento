@@ -4,7 +4,7 @@ import sys
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 
-from fastapi import FastAPI, Depends, Header, HTTPException, status
+from fastapi import FastAPI, Depends, Header, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -12,6 +12,10 @@ from passlib.context import CryptContext
 from jose import JWTError, jwt
 from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
+from fastapi.responses import JSONResponse
+from slowapi import Limiter
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
 import models
 import schemas
@@ -65,6 +69,23 @@ async def lifespan(app: FastAPI):
 # --- INICIALIZAÇÃO DA APLICAÇÃO FASTAPI ---
 # Adicionamos o lifespan aqui na criação do app
 app = FastAPI(title="MVP Agendamento Online", lifespan=lifespan)
+
+# Limita tentativas de login/cadastro por IP: sem isso, nada impedia um
+# ataque de força bruta contra a senha de qualquer conta.
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+
+
+def _limite_excedido(request: Request, exc: RateLimitExceeded):
+    # Resposta no mesmo formato ({"detail": ...}) usado pelo resto da API,
+    # em vez do {"error": ...} padrão do slowapi
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "Muitas tentativas em pouco tempo. Aguarde um minuto e tente novamente."},
+    )
+
+
+app.add_exception_handler(RateLimitExceeded, _limite_excedido)
 
 # Dependência para pegar a sessão do banco
 def get_db():
@@ -134,7 +155,8 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 
 # --- ROTAS DE AUTENTICAÇÃO ---
 @app.post("/register")
-def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+def register(request: Request, user: schemas.UserCreate, db: Session = Depends(get_db)):
     user_exists = db.query(models.UserDB).filter(models.UserDB.username == user.username).first()
     if user_exists:
         raise HTTPException(status_code=400, detail="Usuário já existe")
@@ -145,11 +167,12 @@ def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
     return {"message": "Usuário criado com sucesso!"}
 
 @app.post("/login", response_model=schemas.Token)
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = db.query(models.UserDB).filter(models.UserDB.username == form_data.username).first()
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=400, detail="Usuário ou senha incorretos")
-    
+
     access_token = create_access_token(data={"sub": user.username})
     return {"access_token": access_token, "token_type": "bearer"}
 
