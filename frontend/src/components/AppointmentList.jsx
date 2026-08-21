@@ -64,7 +64,7 @@ const CustomToolbar = (toolbar) => {
     );
 };
 
-export default function AppointmentList({ appointments, onAppointmentDeleted }) {
+export default function AppointmentList({ appointments, onAppointmentDeleted, onEdit }) {
     const [currentDate, setCurrentDate] = useState(new Date());
     const [currentView, setCurrentView] = useState('month');
     
@@ -151,12 +151,20 @@ export default function AppointmentList({ appointments, onAppointmentDeleted }) 
                                 <strong>{appt.client_name}</strong> - {appt.service} <br/>
                                 <span style={{ color: '#666' }}>{new Date(appt.date_time).toLocaleString('pt-BR')}</span>
                             </div>
-                            <button 
-                                onClick={() => handleSelectEvent({ id: appt.id, title: appt.client_name })} 
-                                style={{ backgroundColor: '#DC3545', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '5px', cursor: 'pointer' }}
-                            >
-                                Cancelar
-                            </button>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                <button
+                                    onClick={() => onEdit && onEdit(appt)}
+                                    style={{ backgroundColor: '#007BFF', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '5px', cursor: 'pointer' }}
+                                >
+                                    Editar
+                                </button>
+                                <button
+                                    onClick={() => handleSelectEvent({ id: appt.id, title: appt.client_name })}
+                                    style={{ backgroundColor: '#DC3545', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '5px', cursor: 'pointer' }}
+                                >
+                                    Cancelar
+                                </button>
+                            </div>
                         </li>
                     ))}
                 </ul>

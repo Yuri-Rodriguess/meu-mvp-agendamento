@@ -71,3 +71,23 @@ def test_bloqueia_conflito_de_horario():
 
     resposta_2 = client.post("/appointments/", json=segundo)
     assert resposta_2.status_code == 409
+
+def test_editar_agendamento():
+    """Deve permitir atualizar um agendamento existente"""
+    original = {"client_name": "Cliente Original", "service": "Corte", "date_time": "2026-09-02T09:00:00"}
+    resposta_criacao = client.post("/appointments/", json=original)
+    assert resposta_criacao.status_code == 200
+    appointment_id = resposta_criacao.json()["id"]
+
+    atualizado = {"client_name": "Cliente Editado", "service": "Corte e Barba", "date_time": "2026-09-02T09:00:00"}
+    resposta_edicao = client.put(f"/appointments/{appointment_id}", json=atualizado)
+    assert resposta_edicao.status_code == 200
+    assert resposta_edicao.json()["client_name"] == "Cliente Editado"
+    assert resposta_edicao.json()["service"] == "Corte e Barba"
+
+def test_editar_agendamento_inexistente_retorna_404():
+    resposta = client.put(
+        "/appointments/999999",
+        json={"client_name": "X", "service": "Y", "date_time": "2026-09-03T09:00:00"},
+    )
+    assert resposta.status_code == 404

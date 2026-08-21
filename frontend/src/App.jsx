@@ -13,6 +13,7 @@ function App() {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [currentView, setCurrentView] = useState('cadastro');
     const [testStatus, setTestStatus] = useState('pendente');
+    const [editingAppointment, setEditingAppointment] = useState(null);
 
     const handleLogout = () => {
         localStorage.removeItem('token');
@@ -39,9 +40,22 @@ function App() {
 
     const handleMenuClick = (view) => {
         setCurrentView(view);
+        if (view !== 'cadastro') {
+            setEditingAppointment(null); // Sai do modo edição ao trocar de tela
+        }
         if (window.innerWidth < 768) {
             setIsMenuOpen(false);
         }
+    };
+
+    const handleEditAppointment = (appointment) => {
+        setEditingAppointment(appointment);
+        setCurrentView('cadastro');
+    };
+
+    const handleAppointmentSaved = () => {
+        setEditingAppointment(null);
+        fetchAppointments();
     };
 
     if (!token) {
@@ -82,15 +96,24 @@ function App() {
                 <div className="content-card">
                     {currentView === 'cadastro' && (
                         <div>
-                            <h1 style={{marginBottom: '20px'}}>Agendar Horário</h1>
-                            <AppointmentForm onAppointmentAdded={fetchAppointments} />
+                            <h1 style={{marginBottom: '20px'}}>{editingAppointment ? 'Editar Agendamento' : 'Agendar Horário'}</h1>
+                            <AppointmentForm
+                                key={editingAppointment ? editingAppointment.id : 'novo'}
+                                onAppointmentAdded={handleAppointmentSaved}
+                                editingAppointment={editingAppointment}
+                                onCancelEdit={() => setEditingAppointment(null)}
+                            />
                         </div>
                     )}
 
                     {currentView === 'lista' && (
                         <div>
                             <h1 style={{marginBottom: '20px'}}>Gestão de Agenda</h1>
-                            <AppointmentList appointments={appointments} onAppointmentDeleted={fetchAppointments} />
+                            <AppointmentList
+                                appointments={appointments}
+                                onAppointmentDeleted={fetchAppointments}
+                                onEdit={handleEditAppointment}
+                            />
                         </div>
                     )}
 

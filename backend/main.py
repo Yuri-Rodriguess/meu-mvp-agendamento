@@ -210,6 +210,29 @@ def list_appointments(db: Session = Depends(get_db), current_user: models.UserDB
     # Cada usuário só enxerga os próprios agendamentos
     return db.query(models.AppointmentDB).filter(models.AppointmentDB.owner_id == current_user.id).all()
 
+@app.put("/appointments/{appointment_id}", response_model=schemas.AppointmentResponse)
+def update_appointment(
+    appointment_id: int,
+    appointment: schemas.AppointmentCreate,
+    db: Session = Depends(get_db),
+    current_user: models.UserDB = Depends(get_current_user),
+):
+    db_appointment = (
+        db.query(models.AppointmentDB)
+        .filter(models.AppointmentDB.id == appointment_id, models.AppointmentDB.owner_id == current_user.id)
+        .first()
+    )
+    if not db_appointment:
+        raise HTTPException(status_code=404, detail="Agendamento não encontrado")
+    if _tem_conflito_de_horario(db, current_user.id, appointment.date_time, ignorar_id=appointment_id):
+        raise HTTPException(status_code=409, detail="Já existe um agendamento seu nesse horário.")
+    db_appointment.client_name = appointment.client_name
+    db_appointment.service = appointment.service
+    db_appointment.date_time = appointment.date_time
+    db.commit()
+    db.refresh(db_appointment)
+    return db_appointment
+
 @app.delete("/appointments/{appointment_id}")
 def delete_appointment(appointment_id: int, db: Session = Depends(get_db), current_user: models.UserDB = Depends(get_current_user)):
     db_appointment = (
