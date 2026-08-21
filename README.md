@@ -77,6 +77,15 @@ npm run test
 
 ---
 
+## 🐛 Troubleshooting
+
+**Erro `sqlite3.OperationalError: no such table: users` (ou `appointments`) ao usar a API:**
+O SQLAlchemy cria o arquivo `agendamento.db` assim que conecta, mesmo vazio — mas as tabelas só existem depois que as migrations do Alembic rodam. Se você iniciou o backend sem antes rodar as migrations (ou apagou/recriou o `.db`), rode dentro de `backend/`:
+```
+alembic upgrade head
+```
+Não é preciso reiniciar o `uvicorn --reload` depois disso; ele já enxerga as tabelas novas na próxima requisição.
+
 ## 🗄️ Alterando o schema do banco
 
 Sempre que mudar um model em `backend/models.py`, gere uma nova migration em vez de editar o banco na mão:
