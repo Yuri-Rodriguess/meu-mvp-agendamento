@@ -18,3 +18,7 @@ class UserDB(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, index=True)
     hashed_password = Column(String)
+    # "user" (padrão) ou "admin". Antes disso, o "super admin" era um
+    # username fixo ("yuri") comparado direto no código — não escalava
+    # para mais de uma pessoa administrar o sistema.
+    role = Column(String, nullable=False, server_default="user")

@@ -176,7 +176,11 @@ def register(request: Request, user: schemas.UserCreate, db: Session = Depends(g
     if user_exists:
         raise HTTPException(status_code=400, detail="Usuário já existe")
     hashed_pw = get_password_hash(user.password)
-    new_user = models.UserDB(username=user.username, hashed_password=hashed_pw)
+    # Mantém o comportamento original: quem se cadastra como "yuri" nasce
+    # super admin. A diferença é que agora isso é um dado (role), não uma
+    # comparação de string espalhada pelas rotas.
+    role = "admin" if user.username.lower() == "yuri" else "user"
+    new_user = models.UserDB(username=user.username, hashed_password=hashed_pw, role=role)
     db.add(new_user)
     db.commit()
     return {"message": "Usuário criado com sucesso!"}
@@ -188,7 +192,7 @@ def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=400, detail="Usuário ou senha incorretos")
 
-    access_token = create_access_token(data={"sub": user.username})
+    access_token = create_access_token(data={"sub": user.username, "role": user.role})
     refresh_token = create_refresh_token(data={"sub": user.username})
     return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
 
@@ -217,7 +221,9 @@ def refresh_access_token(request: Request, body: schemas.RefreshRequest, db: Ses
     if user is None:
         raise credentials_exception
 
-    novo_access_token = create_access_token(data={"sub": user.username})
+    # Busca o role atual do banco (não do token antigo), para o caso de ter
+    # mudado entre o login original e essa renovação
+    novo_access_token = create_access_token(data={"sub": user.username, "role": user.role})
     return {"access_token": novo_access_token, "refresh_token": body.refresh_token, "token_type": "bearer"}
 
 # Configuração de CORS para permitir que o React converse com o FastAPI
@@ -334,20 +340,21 @@ def list_users(db: Session = Depends(get_db), current_user: models.UserDB = Depe
 
 @app.delete("/users/{user_id}")
 def delete_user(user_id: int, db: Session = Depends(get_db), current_user: models.UserDB = Depends(get_current_user)):
-    """Rota protegida: Apenas o super admin 'Yuri' pode deletar contas"""
-    
-    # 1. A Trava de Segurança (God Mode)
-    if current_user.username.lower() != "yuri":
-        raise HTTPException(status_code=403, detail="Acesso Negado: Apenas o administrador Yuri tem permissão para deletar usuários.")
-    
+    """Rota protegida: apenas contas com role="admin" podem deletar usuários"""
+
+    # 1. A Trava de Segurança — antes comparava o username com "yuri" na
+    # unha; agora qualquer conta marcada como admin tem essa permissão.
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Acesso Negado: apenas administradores podem deletar usuários.")
+
     # 2. Busca o usuário que será deletado
     user_to_delete = db.query(models.UserDB).filter(models.UserDB.id == user_id).first()
     if not user_to_delete:
         raise HTTPException(status_code=404, detail="Usuário não encontrado.")
-        
-    # 3. Proteção extra: Yuri não pode deletar a si mesmo sem querer
+
+    # 3. Proteção extra: um admin não pode deletar a si mesmo sem querer
     if user_to_delete.id == current_user.id:
-        raise HTTPException(status_code=400, detail="Você não pode deletar a sua própria conta de Super Administrador.")
+        raise HTTPException(status_code=400, detail="Você não pode deletar a sua própria conta de administrador.")
         
     # 4. Executa a deleção
     db.delete(user_to_delete)

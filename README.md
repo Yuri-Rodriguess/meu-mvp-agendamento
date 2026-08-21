@@ -100,7 +100,7 @@ O projeto ainda não está publicado — isso exige criar contas em serviços de
 
 ## 🔒 Notas de segurança
 
-- Cadastre-se pela própria tela de login (rota `/register`) para criar sua conta. O painel "Administradores" e a permissão de excluir contas ficam restritos a quem se cadastrar com o usuário `yuri`.
+- Cadastre-se pela própria tela de login (rota `/register`) para criar sua conta. Cada conta tem um `role` (`user` por padrão); o painel "Administradores" e a permissão de excluir contas ficam restritos a quem tem `role="admin"`. Por compatibilidade com o comportamento original do projeto, cadastrar-se com o usuário `yuri` continua concedendo `role="admin"` automaticamente — para promover outra conta a admin, atualize a coluna `role` diretamente no banco (não há tela para isso ainda).
 - A rota `/api/run-tests` exige o header `X-API-Key`, validado contra `TEST_RUNNER_API_KEY`. Isso evita que qualquer visitante dispare execuções de processo no servidor repetidamente. **Atenção:** como é uma SPA sem backend próprio, essa chave fica embutida no bundle do frontend — ela barra abuso casual/automatizado, mas não substitui um sistema de login real caso o projeto vá para produção com múltiplos usuários.
 - O CORS agora é restrito às origens listadas em `ALLOWED_ORIGINS` (por padrão, apenas `http://localhost:5173`). Ajuste essa variável ao publicar o frontend em outro domínio.
 - Cada agendamento pertence ao usuário que o criou (`owner_id`); a listagem e o cancelamento só enxergam agendamentos da própria conta.

@@ -26,6 +26,7 @@ class RefreshRequest(BaseModel):
 class UserResponse(BaseModel):
     id: int
     username: str
-    
+    role: str
+
     # Permite ler direto do banco de dados (SQLAlchemy)
     model_config = ConfigDict(from_attributes=True)

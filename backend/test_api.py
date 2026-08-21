@@ -1,3 +1,4 @@
+import contextlib
 import datetime
 import os
 
@@ -15,6 +16,11 @@ from sqlalchemy.orm import sessionmaker
 import models
 from main import app, get_current_user, get_db
 from models import UserDB
+
+# Os testes de /register e /login fazem várias chamadas reais em sequência,
+# todas "vindas" do mesmo IP fake do TestClient — sem isso, o rate limiting
+# (pensado para tráfego real) derrubaria a própria suíte de testes com 429.
+app.state.limiter.enabled = False
 
 # Os testes rodam contra um banco SQLite isolado, nunca contra o
 # agendamento.db real: assim o pipeline de CI não cria "sujeira" nos
@@ -43,6 +49,19 @@ def override_get_current_user():
 # e para usar o banco de testes isolado em vez do agendamento.db real
 app.dependency_overrides[get_current_user] = override_get_current_user
 app.dependency_overrides[get_db] = override_get_db
+
+
+@contextlib.contextmanager
+def autenticacao_real():
+    """O Passe VIP do robô vale para toda rota que dependa de
+    get_current_user — inclusive /users/. Testes de permissão por role
+    precisam que a validação de token rode de verdade a partir do
+    Authorization header, então desligamos o bypass só durante eles."""
+    app.dependency_overrides.pop(get_current_user, None)
+    try:
+        yield
+    finally:
+        app.dependency_overrides[get_current_user] = override_get_current_user
 
 # ---------------------------
 
@@ -142,3 +161,35 @@ def test_refresh_rejeita_access_token_usado_no_lugar_do_refresh():
 
     resposta_refresh = client.post("/refresh", json={"refresh_token": access_token})
     assert resposta_refresh.status_code == 401
+
+def test_usuario_comum_nao_pode_deletar_outra_conta():
+    with autenticacao_real():
+        assert client.post("/register", json={"username": "usuario_comum", "password": "senha12345"}).status_code == 200
+        assert client.post("/register", json={"username": "vitima", "password": "senha12345"}).status_code == 200
+
+        token_comum = client.post("/login", data={"username": "usuario_comum", "password": "senha12345"}).json()["access_token"]
+        cabecalho = {"Authorization": f"Bearer {token_comum}"}
+
+        usuarios = client.get("/users/", headers=cabecalho).json()
+        vitima_id = next(u["id"] for u in usuarios if u["username"] == "vitima")
+
+        resposta = client.delete(f"/users/{vitima_id}", headers=cabecalho)
+        assert resposta.status_code == 403
+
+def test_registrar_como_yuri_concede_role_admin():
+    """Compatibilidade com o comportamento antigo: quem se cadastra com o
+    username "yuri" nasce admin e pode deletar outras contas."""
+    with autenticacao_real():
+        assert client.post("/register", json={"username": "yuri", "password": "senha12345"}).status_code == 200
+        assert client.post("/register", json={"username": "vitima_2", "password": "senha12345"}).status_code == 200
+
+        token_yuri = client.post("/login", data={"username": "yuri", "password": "senha12345"}).json()["access_token"]
+        cabecalho = {"Authorization": f"Bearer {token_yuri}"}
+
+        usuarios = client.get("/users/", headers=cabecalho).json()
+        yuri_na_lista = next(u for u in usuarios if u["username"] == "yuri")
+        assert yuri_na_lista["role"] == "admin"
+
+        vitima_id = next(u["id"] for u in usuarios if u["username"] == "vitima_2")
+        resposta = client.delete(f"/users/{vitima_id}", headers=cabecalho)
+        assert resposta.status_code == 200

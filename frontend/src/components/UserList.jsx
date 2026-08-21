@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import api from '../services/api';
 import { toast } from 'react-toastify';
 
-// Função para descobrir quem está logado lendo o Token JWT
-const getLoggedUsername = () => {
+// Lê os dados do usuário logado a partir do payload do token JWT
+const getLoggedUserInfo = () => {
     const token = localStorage.getItem('token');
     if (!token) return null;
     try {
@@ -11,7 +11,7 @@ const getLoggedUsername = () => {
         const payloadBase64 = token.split('.')[1];
         const decodedJson = atob(payloadBase64); // Decodifica a base64
         const payload = JSON.parse(decodedJson);
-        return payload.sub; // No FastAPI, salvamos o username no campo "sub"
+        return { username: payload.sub, role: payload.role };
     } catch {
         return null;
     }
@@ -22,9 +22,10 @@ export default function UserList() {
     const [loading, setLoading] = useState(true);
     const [deletingId, setDeletingId] = useState(null);
 
-    // Descobre quem é o usuário atual e se ele é o Super Admin
-    const currentUser = getLoggedUsername();
-    const isSuperAdmin = currentUser && currentUser.toLowerCase() === 'yuri';
+    // Descobre quem é o usuário atual e se ele tem permissão de admin
+    // (mesma checagem que o backend faz a partir do banco, ver main.py)
+    const currentUser = getLoggedUserInfo();
+    const isAdmin = currentUser?.role === 'admin';
 
     useEffect(() => {
         const fetchUsers = async () => {
@@ -88,12 +89,17 @@ export default function UserList() {
                             </div>
                             
                             <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                                {user.role === 'admin' && (
+                                    <span style={{ backgroundColor: '#f39c12', color: 'white', padding: '5px 12px', borderRadius: '15px', fontSize: '0.8rem', fontWeight: 'bold' }}>
+                                        👑 Admin
+                                    </span>
+                                )}
                                 <span style={{ backgroundColor: '#2ecc71', color: 'white', padding: '5px 12px', borderRadius: '15px', fontSize: '0.8rem', fontWeight: 'bold' }}>
                                     ✅ Ativo
                                 </span>
-                                
-                                {/* O botão só aparece se for o Yuri logado E se o usuário da linha não for o próprio Yuri */}
-                                {isSuperAdmin && user.username.toLowerCase() !== 'yuri' && (
+
+                                {/* O botão só aparece para admins, e nunca para a própria conta logada */}
+                                {isAdmin && user.username !== currentUser.username && (
                                     <button
                                         onClick={() => handleDeleteUser(user.id, user.username)}
                                         disabled={deletingId === user.id}
