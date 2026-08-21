@@ -10,7 +10,7 @@ O projeto foi construído utilizando uma arquitetura moderna cliente-servidor:
 * **Frontend:** React, Vite, Axios, React Big Calendar (SPA com interface responsiva).
 * **Backend:** Python, FastAPI, SQLAlchemy, Pydantic (API RESTful de alta performance).
 * **Banco de Dados:** SQLite (Persistência leve e rápida para o MVP), com versionamento de schema via Alembic.
-* **Qualidade e Automação:** Pytest (Testes de integração) e APScheduler (Cron Jobs).
+* **Qualidade e Automação:** Pytest (testes de integração do backend), Vitest + React Testing Library (testes do frontend) e APScheduler (Cron Jobs).
 
 ## ✨ Funcionalidades Entregues
 - [x] **Gestão de Agendamentos (CRUD):** Criação, listagem, edição e cancelamento de horários, com busca por cliente/serviço.
@@ -67,6 +67,9 @@ Em `frontend/.env`, defina `VITE_TEST_RUNNER_API_KEY` com o **mesmo valor** usad
 
 Para iniciar a interface de usuário: 
 npm run dev  
+
+Para rodar os testes do frontend (Vitest + React Testing Library):
+npm run test
 
 ---
 
