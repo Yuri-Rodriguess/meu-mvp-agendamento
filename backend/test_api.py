@@ -1,15 +1,40 @@
-from fastapi.testclient import TestClient
-from main import app, get_current_user
-from models import UserDB
 import datetime
+
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+import models
+from main import app, get_current_user, get_db
+from models import UserDB
+
+# Os testes rodam contra um banco SQLite isolado, nunca contra o
+# agendamento.db real: assim o pipeline de CI não cria "sujeira" nos
+# dados de produção toda vez que é acionado (manualmente ou às 22h).
+TEST_DATABASE_URL = "sqlite:///./test_agendamento.db"
+engine = create_engine(TEST_DATABASE_URL, connect_args={"check_same_thread": False})
+TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+models.Base.metadata.create_all(bind=engine)
+
+
+def override_get_db():
+    db = TestingSessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
 
 # --- O PASSE VIP DO ROBÔ ---
 # Cria um usuário falso na memória apenas para os testes passarem pela barreira de segurança
 def override_get_current_user():
     return UserDB(id=999, username="robo_de_teste", hashed_password="123")
 
-# Avisa o FastAPI para ignorar a verificação de token oficial e usar o nosso Passe VIP
+# Avisa o FastAPI para ignorar a verificação de token oficial e usar o nosso Passe VIP,
+# e para usar o banco de testes isolado em vez do agendamento.db real
 app.dependency_overrides[get_current_user] = override_get_current_user
+app.dependency_overrides[get_db] = override_get_db
 
 # ---------------------------
 

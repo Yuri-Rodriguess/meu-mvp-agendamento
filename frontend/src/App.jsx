@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import api from './services/api';
+import api, { runTests } from './services/api';
 import AppointmentForm from './components/AppointmentForm';
 import AppointmentList from './components/AppointmentList';
 import Login from './components/Login';
@@ -113,7 +113,7 @@ function App() {
                                     document.getElementById('terminal-testes').innerText = "Iniciando pipeline de testes no servidor...\nExecutando pytest...";
                                     
                                     try {
-                                        const response = await api.get('/api/run-tests');
+                                        const response = await runTests();
                                         const logTexto = response.data.log;
                                         
                                         document.getElementById('terminal-testes').innerText = logTexto;

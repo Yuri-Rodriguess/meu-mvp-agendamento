@@ -36,7 +36,12 @@ Abra um terminal e acesse a pasta do backend:
 cd backend
 
 Para instalar as dependências necessárias: 
-pip install fastapi uvicorn sqlalchemy pydantic pytest httpx apscheduler 
+pip install -r requirements.txt
+
+Copie o arquivo de variáveis de ambiente de exemplo e gere suas próprias chaves:
+cp .env.example .env
+python -c "import secrets; print(secrets.token_hex(32))"
+Cole o valor gerado em `SECRET_KEY` (usada para assinar os tokens de login) dentro de `backend/.env`. Faça o mesmo (com `token_hex(16)`) para `TEST_RUNNER_API_KEY`.
 
 Para iniciar o servidor de desenvolvimento: 
 python -m uvicorn main:app --reload 
@@ -52,5 +57,19 @@ cd frontend
 Para instalar as dependências do Node.js: 
 npm install  
 
+Copie o arquivo de variáveis de ambiente de exemplo:
+cp .env.example .env
+Em `frontend/.env`, defina `VITE_TEST_RUNNER_API_KEY` com o **mesmo valor** usado em `backend/.env` (é a chave que autoriza o botão "Atualizar Log de Testes" a acionar o Pytest no servidor).
+
 Para iniciar a interface de usuário: 
 npm run dev  
+
+---
+
+## 🔒 Notas de segurança
+
+- Cadastre-se pela própria tela de login (rota `/register`) para criar sua conta. O painel "Administradores" e a permissão de excluir contas ficam restritos a quem se cadastrar com o usuário `yuri`.
+- A rota `/api/run-tests` exige o header `X-API-Key`, validado contra `TEST_RUNNER_API_KEY`. Isso evita que qualquer visitante dispare execuções de processo no servidor repetidamente. **Atenção:** como é uma SPA sem backend próprio, essa chave fica embutida no bundle do frontend — ela barra abuso casual/automatizado, mas não substitui um sistema de login real caso o projeto vá para produção com múltiplos usuários.
+- O CORS agora é restrito às origens listadas em `ALLOWED_ORIGINS` (por padrão, apenas `http://localhost:5173`). Ajuste essa variável ao publicar o frontend em outro domínio.
+- Cada agendamento pertence ao usuário que o criou (`owner_id`); a listagem e o cancelamento só enxergam agendamentos da própria conta.
+- Os testes automatizados (`pytest`) rodam contra um banco SQLite isolado (`test_agendamento.db`), não contra `agendamento.db` — assim o pipeline de CI não insere dados fictícios no banco real.

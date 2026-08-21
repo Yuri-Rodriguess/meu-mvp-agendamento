@@ -1,0 +1,15 @@
+# Bancos de dados locais (não devem ser versionados)
+*.db
+*.db-journal
+
+# Variáveis de ambiente / segredos
+.env
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Ambientes virtuais
+.venv/
+venv/

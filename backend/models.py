@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
 from database import Base
 
 class AppointmentDB(Base):
@@ -8,6 +8,10 @@ class AppointmentDB(Base):
     client_name = Column(String, index=True)
     service = Column(String)
     date_time = Column(DateTime)
+    # Cada agendamento pertence a um usuário — isola os dados de cada
+    # conta. Fica anulável só para não quebrar linhas criadas antes
+    # desta migração; agendamentos novos sempre têm dono.
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
 
 class UserDB(Base):
     __tablename__ = "users"

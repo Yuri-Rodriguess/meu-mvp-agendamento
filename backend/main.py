@@ -1,5 +1,7 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+import os
+from fastapi import FastAPI, Depends, Header, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import inspect, text
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from passlib.context import CryptContext
@@ -9,13 +11,42 @@ import subprocess
 import sys
 from contextlib import asynccontextmanager
 from apscheduler.schedulers.background import BackgroundScheduler
+from dotenv import load_dotenv
 
 import models
 import schemas
 from database import engine, SessionLocal
 
+load_dotenv()
+
+# Origens autorizadas a consumir a API (nunca usar "*" fora de um teste rápido local)
+ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(",")
+    if origin.strip()
+]
+
+# Chave exigida para acionar o pipeline de testes via API (ver .env.example)
+TEST_RUNNER_API_KEY = os.getenv("TEST_RUNNER_API_KEY")
+
 # Cria as tabelas no banco de dados
 models.Base.metadata.create_all(bind=engine)
+
+
+def _garantir_coluna_owner_id():
+    """create_all() só cria tabelas novas — como 'appointments' já existia
+    antes da coluna owner_id ser adicionada, precisamos de uma migração
+    manual simples (o projeto não usa Alembic)."""
+    inspector = inspect(engine)
+    if "appointments" not in inspector.get_table_names():
+        return
+    colunas = [col["name"] for col in inspector.get_columns("appointments")]
+    if "owner_id" not in colunas:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE appointments ADD COLUMN owner_id INTEGER REFERENCES users(id)"))
+
+
+_garantir_coluna_owner_id()
 
 def tarefa_testes_diarios():
     """Função que o agendador vai executar sozinho no horário marcado"""
@@ -54,12 +85,24 @@ def get_db():
     finally:
         db.close()
 
-SECRET_KEY = "chave-super-secreta-do-mvp-agendamento"
+SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+
+
+def verify_test_runner_key(x_api_key: str | None = Header(None)):
+    """Protege a rota que dispara o Pytest: sem isso, qualquer visitante
+    poderia acionar execução de processos no servidor repetidamente."""
+    if not TEST_RUNNER_API_KEY:
+        raise HTTPException(
+            status_code=500,
+            detail="TEST_RUNNER_API_KEY não configurada no servidor (veja .env.example).",
+        )
+    if x_api_key != TEST_RUNNER_API_KEY:
+        raise HTTPException(status_code=401, detail="Chave de API inválida.")
 
 def get_password_hash(password):
     return pwd_context.hash(password)
@@ -67,11 +110,19 @@ def get_password_hash(password):
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
 
+def _chave_secreta() -> str:
+    if not SECRET_KEY:
+        raise HTTPException(
+            status_code=500,
+            detail="SECRET_KEY não configurada no servidor (veja .env.example).",
+        )
+    return SECRET_KEY
+
 def create_access_token(data: dict):
     to_encode = data.copy()
     expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return jwt.encode(to_encode, _chave_secreta(), algorithm=ALGORITHM)
 
 # Função que verifica se o usuário está logado em cada requisição
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
@@ -81,7 +132,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, _chave_secreta(), algorithms=[ALGORITHM])
         username: str = payload.get("sub")
         if username is None:
             raise credentials_exception
@@ -116,14 +167,14 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 # Configuração de CORS para permitir que o React converse com o FastAPI
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], 
+    allow_origins=ALLOWED_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 @app.post("/appointments/", response_model=schemas.AppointmentResponse)
 def create_appointment(appointment: schemas.AppointmentCreate, db: Session = Depends(get_db), current_user: models.UserDB = Depends(get_current_user)):
-    db_appointment = models.AppointmentDB(**appointment.model_dump())
+    db_appointment = models.AppointmentDB(**appointment.model_dump(), owner_id=current_user.id)
     db.add(db_appointment)
     db.commit()
     db.refresh(db_appointment)
@@ -131,18 +182,23 @@ def create_appointment(appointment: schemas.AppointmentCreate, db: Session = Dep
 
 @app.get("/appointments/", response_model=list[schemas.AppointmentResponse])
 def list_appointments(db: Session = Depends(get_db), current_user: models.UserDB = Depends(get_current_user)):
-    return db.query(models.AppointmentDB).all()
+    # Cada usuário só enxerga os próprios agendamentos
+    return db.query(models.AppointmentDB).filter(models.AppointmentDB.owner_id == current_user.id).all()
 
 @app.delete("/appointments/{appointment_id}")
 def delete_appointment(appointment_id: int, db: Session = Depends(get_db), current_user: models.UserDB = Depends(get_current_user)):
-    db_appointment = db.query(models.AppointmentDB).filter(models.AppointmentDB.id == appointment_id).first()
+    db_appointment = (
+        db.query(models.AppointmentDB)
+        .filter(models.AppointmentDB.id == appointment_id, models.AppointmentDB.owner_id == current_user.id)
+        .first()
+    )
     if not db_appointment:
         raise HTTPException(status_code=404, detail="Agendamento não encontrado")
     db.delete(db_appointment)
     db.commit()
     return {"message": "Agendamento cancelado com sucesso"}
 
-@app.get("/api/run-tests")
+@app.get("/api/run-tests", dependencies=[Depends(verify_test_runner_key)])
 def rodar_testes_automatizados():
     """Endpoint exclusivo para o Dashboard que aciona o Pytest sob demanda"""
     try:
