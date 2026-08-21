@@ -7,6 +7,10 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 from datetime import datetime, timedelta, timezone
+
+# Duração assumida de cada agendamento (o calendário do frontend também
+# desenha os eventos com 1h de duração — ver AppointmentList.jsx)
+DURACAO_AGENDAMENTO = timedelta(hours=1)
 import subprocess
 import sys
 from contextlib import asynccontextmanager
@@ -172,8 +176,29 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+def _tem_conflito_de_horario(db: Session, owner_id: int, date_time: datetime, ignorar_id: int | None = None) -> bool:
+    """Verifica se o horário pedido colide com outro agendamento do mesmo
+    usuário, assumindo que cada agendamento ocupa DURACAO_AGENDAMENTO.
+    Busca candidatos numa janela de tempo e compara em Python, para não
+    depender de aritmética de data no SQL (nem todo dialeto suporta bem)."""
+    novo_inicio = date_time
+    novo_fim = date_time + DURACAO_AGENDAMENTO
+    candidatos = db.query(models.AppointmentDB).filter(
+        models.AppointmentDB.owner_id == owner_id,
+        models.AppointmentDB.date_time > novo_inicio - DURACAO_AGENDAMENTO,
+        models.AppointmentDB.date_time < novo_fim,
+    )
+    if ignorar_id is not None:
+        candidatos = candidatos.filter(models.AppointmentDB.id != ignorar_id)
+    return any(
+        existente.date_time < novo_fim and existente.date_time + DURACAO_AGENDAMENTO > novo_inicio
+        for existente in candidatos
+    )
+
 @app.post("/appointments/", response_model=schemas.AppointmentResponse)
 def create_appointment(appointment: schemas.AppointmentCreate, db: Session = Depends(get_db), current_user: models.UserDB = Depends(get_current_user)):
+    if _tem_conflito_de_horario(db, current_user.id, appointment.date_time):
+        raise HTTPException(status_code=409, detail="Já existe um agendamento seu nesse horário.")
     db_appointment = models.AppointmentDB(**appointment.model_dump(), owner_id=current_user.id)
     db.add(db_appointment)
     db.commit()

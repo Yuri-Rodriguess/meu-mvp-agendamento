@@ -59,3 +59,15 @@ def test_criar_agendamento_pipeline_ci():
     # Garante que o item foi criado com sucesso (Status 200) e recebeu um ID
     assert response.status_code == 200
     assert "id" in response.json()
+
+def test_bloqueia_conflito_de_horario():
+    """Não deve permitir dois agendamentos do mesmo usuário no mesmo horário"""
+    horario = "2026-09-01T15:00:00"
+    primeiro = {"client_name": "Cliente 1", "service": "Corte", "date_time": horario}
+    segundo = {"client_name": "Cliente 2", "service": "Barba", "date_time": horario}
+
+    resposta_1 = client.post("/appointments/", json=primeiro)
+    assert resposta_1.status_code == 200
+
+    resposta_2 = client.post("/appointments/", json=segundo)
+    assert resposta_2.status_code == 409
