@@ -25,7 +25,18 @@ app.state.limiter.enabled = False
 # Os testes rodam contra um banco SQLite isolado, nunca contra o
 # agendamento.db real: assim o pipeline de CI não cria "sujeira" nos
 # dados de produção toda vez que é acionado (manualmente ou às 22h).
-TEST_DATABASE_URL = "sqlite:///./test_agendamento.db"
+TEST_DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_agendamento.db")
+
+# Vários testes usam dados fixos (mesmo horário, mesmo username) e não
+# limpam o que criam. Rodar a suíte duas vezes seguidas sem apagar o banco
+# anterior gera 409/400 de "já existe" — por isso começamos cada execução
+# derrubando o arquivo da vez anterior, garantindo um banco sempre vazio.
+for suffix in ("", "-journal", "-wal", "-shm"):
+    path = TEST_DB_PATH + suffix
+    if os.path.exists(path):
+        os.remove(path)
+
+TEST_DATABASE_URL = f"sqlite:///{TEST_DB_PATH}"
 engine = create_engine(TEST_DATABASE_URL, connect_args={"check_same_thread": False})
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -99,6 +110,138 @@ def test_criar_agendamento_com_email_nao_quebra_mesmo_sem_smtp_configurado():
     })
     assert resposta.status_code == 200
     assert resposta.json()["client_email"] == "cliente@teste.com"
+
+def test_criar_agendamento_gera_token_de_ativacao_do_telegram():
+    """Todo agendamento novo já nasce com um token para o link de ativação
+    do lembrete via Telegram (ver telegram_link_token em models.py), mas
+    ainda não vinculado a nenhum chat."""
+    resposta = client.post("/appointments/", json={
+        "client_name": "Cliente Telegram",
+        "service": "Corte",
+        "date_time": "2026-09-06T09:00:00",
+    })
+    assert resposta.status_code == 200
+    corpo = resposta.json()
+    assert corpo["telegram_link_token"]
+    assert corpo["telegram_linked"] is False
+
+def test_client_phone_e_salvo_e_retornado():
+    resposta = client.post("/appointments/", json={
+        "client_name": "Cliente Com Celular",
+        "service": "Corte",
+        "date_time": "2026-09-06T10:00:00",
+        "client_phone": "11912345678",
+    })
+    assert resposta.status_code == 200
+    assert resposta.json()["client_phone"] == "11912345678"
+
+def test_editar_agendamento_atualiza_celular():
+    criado = client.post("/appointments/", json={
+        "client_name": "Cliente Sem Celular", "service": "Corte", "date_time": "2026-09-06T11:00:00",
+    }).json()
+
+    editado = client.put(f"/appointments/{criado['id']}", json={
+        "client_name": "Cliente Sem Celular", "service": "Corte",
+        "date_time": "2026-09-06T11:00:00", "client_phone": "11987654321",
+    })
+    assert editado.status_code == 200
+    assert editado.json()["client_phone"] == "11987654321"
+
+def test_editar_horario_reseta_lembrete_ja_enviado():
+    """Se o horário muda, o lembrete de 2h precisa poder disparar de novo
+    (ver reminder_sent em main.py/update_appointment)."""
+    criado = client.post("/appointments/", json={
+        "client_name": "Cliente Remarcado", "service": "Corte", "date_time": "2026-09-06T12:00:00",
+    }).json()
+
+    # Simula que o lembrete já tinha sido enviado para o horário original
+    db = TestingSessionLocal()
+    try:
+        agendamento = db.query(models.AppointmentDB).filter(models.AppointmentDB.id == criado["id"]).first()
+        agendamento.reminder_sent = True
+        db.commit()
+    finally:
+        db.close()
+
+    client.put(f"/appointments/{criado['id']}", json={
+        "client_name": "Cliente Remarcado", "service": "Corte", "date_time": "2026-09-06T13:00:00",
+    })
+
+    db = TestingSessionLocal()
+    try:
+        agendamento = db.query(models.AppointmentDB).filter(models.AppointmentDB.id == criado["id"]).first()
+        assert agendamento.reminder_sent is False
+    finally:
+        db.close()
+
+def test_criar_e_listar_profissionais():
+    resposta = client.post("/professionals/", json={"name": "Maria"})
+    assert resposta.status_code == 200
+    assert resposta.json()["name"] == "Maria"
+
+    listagem = client.get("/professionals/")
+    assert listagem.status_code == 200
+    assert any(p["name"] == "Maria" for p in listagem.json())
+
+def test_criar_agendamento_com_profissional_valido_retorna_nome():
+    profissional = client.post("/professionals/", json={"name": "Carlos Barbeiro"}).json()
+    resposta = client.post("/appointments/", json={
+        "client_name": "Cliente X", "service": "Corte", "date_time": "2026-09-08T09:00:00",
+        "professional_id": profissional["id"],
+    })
+    assert resposta.status_code == 200
+    assert resposta.json()["professional_name"] == "Carlos Barbeiro"
+
+def test_criar_agendamento_com_profissional_inexistente_retorna_404():
+    resposta = client.post("/appointments/", json={
+        "client_name": "Cliente X", "service": "Corte", "date_time": "2026-09-08T11:00:00",
+        "professional_id": 999999,
+    })
+    assert resposta.status_code == 404
+
+def test_deletar_profissional_remove_atribuicao_do_agendamento():
+    """O agendamento continua existindo depois de excluir o profissional —
+    só perde a atribuição (ver delete_professional em main.py)."""
+    profissional = client.post("/professionals/", json={"name": "Ana Manicure"}).json()
+    agendamento = client.post("/appointments/", json={
+        "client_name": "Cliente Y", "service": "Manicure", "date_time": "2026-09-08T14:00:00",
+        "professional_id": profissional["id"],
+    }).json()
+
+    assert client.delete(f"/professionals/{profissional['id']}").status_code == 200
+
+    agendamentos = client.get("/appointments/").json()
+    atualizado = next(a for a in agendamentos if a["id"] == agendamento["id"])
+    assert atualizado["professional_id"] is None
+    assert atualizado["professional_name"] is None
+
+def test_profissional_e_isolado_por_conta():
+    """Um salão não pode ver nem atribuir agendamentos ao profissional de
+    outra conta (mesmo isolamento de appointments.owner_id)."""
+    with autenticacao_real():
+        client.post("/register", json={"username": "salao_a", "password": "senha12345"})
+        client.post("/register", json={"username": "salao_b", "password": "senha12345"})
+        token_a = client.post("/login", data={"username": "salao_a", "password": "senha12345"}).json()["access_token"]
+        token_b = client.post("/login", data={"username": "salao_b", "password": "senha12345"}).json()["access_token"]
+
+        criado = client.post(
+            "/professionals/", json={"name": "Funcionária do Salão A"},
+            headers={"Authorization": f"Bearer {token_a}"},
+        )
+        profissional_id = criado.json()["id"]
+
+        listagem_b = client.get("/professionals/", headers={"Authorization": f"Bearer {token_b}"})
+        assert all(p["id"] != profissional_id for p in listagem_b.json())
+
+        resposta = client.post(
+            "/appointments/",
+            json={
+                "client_name": "Cliente do Salão B", "service": "Corte", "date_time": "2026-09-09T09:00:00",
+                "professional_id": profissional_id,
+            },
+            headers={"Authorization": f"Bearer {token_b}"},
+        )
+        assert resposta.status_code == 404
 
 def test_bloqueia_conflito_de_horario():
     """Não deve permitir dois agendamentos do mesmo usuário no mesmo horário"""

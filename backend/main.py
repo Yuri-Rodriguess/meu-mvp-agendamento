@@ -1,4 +1,5 @@
 import os
+import secrets
 import subprocess
 import sys
 from contextlib import asynccontextmanager
@@ -56,12 +57,69 @@ def tarefa_testes_diarios():
     except Exception as e:
         print(f"[{datetime.now()}] ❌ Erro ao rodar testes automáticos: {e}")
 
+# Janela usada pelo lembrete de Telegram: um agendamento entra na fila assim
+# que faltar 2h ou menos para ele (ver enviar_lembretes_pendentes).
+JANELA_LEMBRETE_TELEGRAM = timedelta(hours=2)
+
+def processar_ativacoes_telegram():
+    """Job periódico e leve (roda a cada 15s): pergunta ao Telegram se
+    alguém apertou "Start" no link de ativação (ver telegram_link_token em
+    models.py) e, se sim, vincula aquele chat ao agendamento certo."""
+    if not notifications.telegram_configurado():
+        return
+    ativacoes = notifications.buscar_novas_ativacoes_telegram()
+    if not ativacoes:
+        return
+    db = SessionLocal()
+    try:
+        for ativacao in ativacoes:
+            agendamento = db.query(models.AppointmentDB).filter(
+                models.AppointmentDB.telegram_link_token == ativacao["token"]
+            ).first()
+            if agendamento is None:
+                continue
+            agendamento.telegram_chat_id = ativacao["chat_id"]
+            db.commit()
+            notifications.confirmar_ativacao_telegram(ativacao["chat_id"])
+    finally:
+        db.close()
+
+def enviar_lembretes_pendentes():
+    """Job periódico (a cada 15min): dispara o lembrete via Telegram para
+    agendamentos a ~2h de distância que já têm o chat vinculado e ainda não
+    foram avisados."""
+    db = SessionLocal()
+    try:
+        agora = datetime.now()
+        candidatos = db.query(models.AppointmentDB).filter(
+            models.AppointmentDB.telegram_chat_id.isnot(None),
+            models.AppointmentDB.reminder_sent.is_(False),
+            models.AppointmentDB.date_time > agora,
+            models.AppointmentDB.date_time <= agora + JANELA_LEMBRETE_TELEGRAM,
+        ).all()
+        for agendamento in candidatos:
+            notifications.enviar_lembrete_telegram(
+                agendamento.telegram_chat_id,
+                agendamento.client_name,
+                agendamento.service,
+                agendamento.date_time,
+            )
+            agendamento.reminder_sent = True
+            db.commit()
+    finally:
+        db.close()
+
 # O 'lifespan' garante que o relógio inicie quando a API ligar, e desligue quando a API parar
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     scheduler = BackgroundScheduler()
     # Configura para rodar todos os dias, exatamente às 22h e 00 minutos
     scheduler.add_job(tarefa_testes_diarios, 'cron', hour=22, minute=0)
+    # Sem TELEGRAM_BOT_TOKEN configurado essas duas funções só retornam na
+    # hora (ver notifications.telegram_configurado) — não custa nada deixá-
+    # las agendadas sempre.
+    scheduler.add_job(processar_ativacoes_telegram, 'interval', seconds=15, id='telegram_polling')
+    scheduler.add_job(enviar_lembretes_pendentes, 'interval', minutes=15, id='lembretes_telegram')
     scheduler.start()
     print("⏰ Agendador ativado! Testes programados para as 22:00.")
     yield
@@ -254,6 +312,19 @@ def _tem_conflito_de_horario(db: Session, owner_id: int, date_time: datetime, ig
         for existente in candidatos
     )
 
+def _validar_profissional(db: Session, owner_id: int, professional_id: int | None) -> None:
+    """Garante que o profissional escolhido existe e pertence à mesma
+    conta — sem isso, um usuário poderia atribuir agendamentos a um
+    profissional de outra conta só adivinhando o id."""
+    if professional_id is None:
+        return
+    existe = db.query(models.ProfessionalDB).filter(
+        models.ProfessionalDB.id == professional_id,
+        models.ProfessionalDB.owner_id == owner_id,
+    ).first()
+    if not existe:
+        raise HTTPException(status_code=404, detail="Profissional não encontrado.")
+
 @app.post("/appointments/", response_model=schemas.AppointmentResponse)
 def create_appointment(
     appointment: schemas.AppointmentCreate,
@@ -263,7 +334,13 @@ def create_appointment(
 ):
     if _tem_conflito_de_horario(db, current_user.id, appointment.date_time):
         raise HTTPException(status_code=409, detail="Já existe um agendamento seu nesse horário.")
-    db_appointment = models.AppointmentDB(**appointment.model_dump(), owner_id=current_user.id)
+    _validar_profissional(db, current_user.id, appointment.professional_id)
+    db_appointment = models.AppointmentDB(
+        **appointment.model_dump(),
+        owner_id=current_user.id,
+        # Usado no link de ativação do lembrete via Telegram (t.me/<bot>?start=<token>)
+        telegram_link_token=secrets.token_urlsafe(8),
+    )
     db.add(db_appointment)
     db.commit()
     db.refresh(db_appointment)
@@ -315,10 +392,17 @@ def update_appointment(
         raise HTTPException(status_code=404, detail="Agendamento não encontrado")
     if _tem_conflito_de_horario(db, current_user.id, appointment.date_time, ignorar_id=appointment_id):
         raise HTTPException(status_code=409, detail="Já existe um agendamento seu nesse horário.")
+    _validar_profissional(db, current_user.id, appointment.professional_id)
+    if db_appointment.date_time != appointment.date_time:
+        # Horário mudou: o lembrete de "faltam 2h" precisa poder disparar
+        # de novo para o novo horário.
+        db_appointment.reminder_sent = False
     db_appointment.client_name = appointment.client_name
     db_appointment.service = appointment.service
     db_appointment.date_time = appointment.date_time
     db_appointment.client_email = appointment.client_email
+    db_appointment.client_phone = appointment.client_phone
+    db_appointment.professional_id = appointment.professional_id
     db.commit()
     db.refresh(db_appointment)
     return db_appointment
@@ -335,6 +419,53 @@ def delete_appointment(appointment_id: int, db: Session = Depends(get_db), curre
     db.delete(db_appointment)
     db.commit()
     return {"message": "Agendamento cancelado com sucesso"}
+
+# --- ROTAS DE PROFISSIONAIS (equipe que atende os agendamentos) ---
+@app.post("/professionals/", response_model=schemas.ProfessionalResponse)
+def create_professional(
+    professional: schemas.ProfessionalCreate,
+    db: Session = Depends(get_db),
+    current_user: models.UserDB = Depends(get_current_user),
+):
+    db_professional = models.ProfessionalDB(name=professional.name, owner_id=current_user.id)
+    db.add(db_professional)
+    db.commit()
+    db.refresh(db_professional)
+    return db_professional
+
+@app.get("/professionals/", response_model=list[schemas.ProfessionalResponse])
+def list_professionals(db: Session = Depends(get_db), current_user: models.UserDB = Depends(get_current_user)):
+    # Cada conta só enxerga a própria equipe
+    return (
+        db.query(models.ProfessionalDB)
+        .filter(models.ProfessionalDB.owner_id == current_user.id)
+        .order_by(models.ProfessionalDB.name)
+        .all()
+    )
+
+@app.delete("/professionals/{professional_id}")
+def delete_professional(
+    professional_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.UserDB = Depends(get_current_user),
+):
+    db_professional = (
+        db.query(models.ProfessionalDB)
+        .filter(models.ProfessionalDB.id == professional_id, models.ProfessionalDB.owner_id == current_user.id)
+        .first()
+    )
+    if not db_professional:
+        raise HTTPException(status_code=404, detail="Profissional não encontrado.")
+
+    # Agendamentos que apontavam pra esse profissional continuam existindo,
+    # só perdem a atribuição (em vez de serem bloqueados ou apagados junto).
+    db.query(models.AppointmentDB).filter(
+        models.AppointmentDB.professional_id == professional_id
+    ).update({"professional_id": None})
+
+    db.delete(db_professional)
+    db.commit()
+    return {"message": "Profissional removido com sucesso"}
 
 @app.get("/api/run-tests", dependencies=[Depends(verify_test_runner_key)])
 def rodar_testes_automatizados():
