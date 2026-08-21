@@ -6,7 +6,7 @@ import AppointmentForm from './AppointmentForm';
 import api from '../services/api';
 
 vi.mock('../services/api', () => ({
-    default: { post: vi.fn(), put: vi.fn() },
+    default: { post: vi.fn(), put: vi.fn(), get: vi.fn(() => Promise.resolve({ data: [] })) },
 }));
 
 vi.mock('react-toastify', () => ({
@@ -58,6 +58,8 @@ describe('AppointmentForm', () => {
             service: 'Barba',
             date_time: '2026-09-10T10:00',
             client_email: null,
+            client_phone: null,
+            professional_id: null,
         }));
         expect(toast.success).toHaveBeenCalled();
         expect(onAppointmentAdded).toHaveBeenCalled();
@@ -77,6 +79,41 @@ describe('AppointmentForm', () => {
 
         await waitFor(() => expect(api.post).toHaveBeenCalledWith('/appointments/', expect.objectContaining({
             client_email: 'cliente@teste.com',
+        })));
+    });
+
+    it('envia o celular do cliente quando preenchido', async () => {
+        api.post.mockResolvedValueOnce({ data: { id: 1 } });
+        const user = userEvent.setup();
+
+        render(<AppointmentForm onAppointmentAdded={vi.fn()} />);
+
+        await user.type(screen.getByLabelText(/nome do cliente/i), 'Cliente Teste');
+        await user.type(screen.getByLabelText(/serviço/i), 'Barba');
+        await user.type(screen.getByLabelText(/data e horário/i), '2026-09-10T10:00');
+        await user.type(screen.getByLabelText(/celular do cliente/i), '11912345678');
+        await user.click(screen.getByRole('button', { name: /agendar horário/i }));
+
+        await waitFor(() => expect(api.post).toHaveBeenCalledWith('/appointments/', expect.objectContaining({
+            client_phone: '11912345678',
+        })));
+    });
+
+    it('envia o profissional escolhido no seletor', async () => {
+        api.get.mockResolvedValueOnce({ data: [{ id: 7, name: 'Carlos Barbeiro' }] });
+        api.post.mockResolvedValueOnce({ data: { id: 1 } });
+        const user = userEvent.setup();
+
+        render(<AppointmentForm onAppointmentAdded={vi.fn()} />);
+
+        await user.type(screen.getByLabelText(/nome do cliente/i), 'Cliente Teste');
+        await user.type(screen.getByLabelText(/serviço/i), 'Barba');
+        await user.type(screen.getByLabelText(/data e horário/i), '2026-09-10T10:00');
+        await user.selectOptions(await screen.findByLabelText(/profissional/i), '7');
+        await user.click(screen.getByRole('button', { name: /agendar horário/i }));
+
+        await waitFor(() => expect(api.post).toHaveBeenCalledWith('/appointments/', expect.objectContaining({
+            professional_id: 7,
         })));
     });
 

@@ -3,9 +3,33 @@ import api, { runTests } from './services/api';
 import AppointmentForm from './components/AppointmentForm';
 import AppointmentList from './components/AppointmentList';
 import Login from './components/Login';
+import ThemeSettings from './components/ThemeSettings';
+import Professionals from './components/Professionals';
 import './App.css';
 import UserList from './components/UserList';
 import { toast } from 'react-toastify';
+import { loadTheme, saveTheme, applyTheme } from './theme';
+
+// Lê o nome do usuário logado a partir do payload do token JWT, só para
+// exibir na sidebar (mesma técnica usada em components/UserList.jsx)
+const getLoggedUsername = (token) => {
+    if (!token) return null;
+    try {
+        const payloadBase64 = token.split('.')[1];
+        const payload = JSON.parse(atob(payloadBase64));
+        return payload.sub ?? null;
+    } catch {
+        return null;
+    }
+};
+
+const NAV_ITEMS = [
+    { key: 'cadastro', label: 'Fazer um Cadastro', icon: '📅' },
+    { key: 'lista', label: 'Verificar Cadastros', icon: '📋' },
+    { key: 'profissionais', label: 'Profissionais', icon: '🧑‍💼' },
+    { key: 'testes', label: 'Resultados de Testes', icon: '⚙️' },
+    { key: 'usuarios', label: 'Administradores', icon: '👥' },
+];
 
 function App() {
 
@@ -17,6 +41,16 @@ function App() {
     const [editingAppointment, setEditingAppointment] = useState(null);
     const [runningTests, setRunningTests] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
+    const [theme, setTheme] = useState(loadTheme);
+    const [showThemeSettings, setShowThemeSettings] = useState(false);
+
+    // Aplica o tema (claro/escuro + cor de marca) no <html> sempre que
+    // mudar, e persiste no navegador. Roda antes do "if (!token)" abaixo
+    // de propósito — assim a tela de login também recebe a personalização.
+    useEffect(() => {
+        applyTheme(theme);
+        saveTheme(theme);
+    }, [theme]);
 
     const handleLogout = () => {
         localStorage.removeItem('token');
@@ -95,40 +129,61 @@ function App() {
         return <Login setToken={setToken} />;
     }
 
+    const loggedUsername = getLoggedUsername(token);
+
     return (
         <div className="app-container">
             {/* --- MENU LATERAL --- */}
             <div className={`sidebar ${isMenuOpen ? 'open' : ''}`}>
                 <button className="close-btn" onClick={() => setIsMenuOpen(false)} aria-label="Fechar menu">×</button>
-                <h2>Painel Ágil</h2>
-                <ul>
-                    <li className={currentView === 'cadastro' ? 'active' : ''}>
-                        <button className="sidebar-link" onClick={() => handleMenuClick('cadastro')}>
-                            📅 Fazer um Cadastro
-                        </button>
-                    </li>
-                    <li className={currentView === 'lista' ? 'active' : ''}>
-                        <button className="sidebar-link" onClick={() => handleMenuClick('lista')}>
-                            📋 Verificar Cadastros
-                        </button>
-                    </li>
-                    <li className={currentView === 'testes' ? 'active' : ''}>
-                        <button className="sidebar-link" onClick={() => handleMenuClick('testes')}>
-                            ⚙️ Resultados de Testes
-                        </button>
-                    </li>
-                    <li className={currentView === 'usuarios' ? 'active' : ''}>
-                        <button className="sidebar-link" onClick={() => handleMenuClick('usuarios')}>
-                            👥 Administradores
-                        </button>
-                    </li>
-                    <li style={{ marginTop: '20px' }}>
-                        <button className="sidebar-link" onClick={handleLogout} style={{ color: '#e74c3c', fontWeight: 'bold' }}>
-                            🚪 Sair do Sistema
-                        </button>
-                    </li>
-                </ul>
+                <div className="sidebar-brand">
+                    <div className="sidebar-brand-icon" aria-hidden="true">📅</div>
+                    <div className="sidebar-brand-text">
+                        <strong>Painel Ágil</strong>
+                        <span>Agendamento Online</span>
+                    </div>
+                </div>
+                <nav>
+                    <ul>
+                        {NAV_ITEMS.map((item) => (
+                            <li key={item.key} className={currentView === item.key ? 'active' : ''}>
+                                <button className="sidebar-link" onClick={() => handleMenuClick(item.key)}>
+                                    <span className="icon" aria-hidden="true">{item.icon}</span>
+                                    {item.label}
+                                </button>
+                            </li>
+                        ))}
+                    </ul>
+                </nav>
+                <div className="sidebar-footer">
+                    {loggedUsername && (
+                        <div className="sidebar-user">
+                            <div className="sidebar-user-avatar" aria-hidden="true">
+                                {loggedUsername.slice(0, 2).toUpperCase()}
+                            </div>
+                            <span className="sidebar-user-name">{loggedUsername}</span>
+                        </div>
+                    )}
+                    <ul>
+                        <li>
+                            <button className="sidebar-link" onClick={() => setShowThemeSettings(true)}>
+                                <span className="icon" aria-hidden="true">🎨</span>
+                                Aparência
+                            </button>
+                        </li>
+                        <li>
+                            <button className="sidebar-link sidebar-logout" onClick={handleLogout}>
+                                <span className="icon" aria-hidden="true">🚪</span>
+                                Sair do Sistema
+                            </button>
+                        </li>
+                    </ul>
+                </div>
             </div>
+
+            {showThemeSettings && (
+                <ThemeSettings theme={theme} onChange={setTheme} onClose={() => setShowThemeSettings(false)} />
+            )}
 
             {/* Escurece o fundo e permite fechar o menu clicando fora dele (mobile) */}
             <div
@@ -139,14 +194,28 @@ function App() {
 
             {/* --- CONTEÚDO PRINCIPAL --- */}
             <div className={`main-content ${isMenuOpen ? 'shifted' : ''}`}>
-                <button className="hamburger-btn" onClick={() => setIsMenuOpen(true)} aria-label="Abrir menu">
-                    ☰ Menu
-                </button>
+                <div className="top-bar">
+                    <button className="hamburger-btn" onClick={() => setIsMenuOpen(true)} aria-label="Abrir menu">
+                        ☰ Menu
+                    </button>
+                    <button
+                        className="hamburger-btn"
+                        style={{ marginLeft: 'auto' }}
+                        onClick={() => setTheme((atual) => ({ ...atual, mode: atual.mode === 'dark' ? 'light' : 'dark' }))}
+                        aria-label={theme.mode === 'dark' ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
+                        title={theme.mode === 'dark' ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
+                    >
+                        {theme.mode === 'dark' ? '☀️' : '🌙'}
+                    </button>
+                </div>
 
                 <div className="content-card">
                     {currentView === 'cadastro' && (
                         <div>
-                            <h1 style={{marginBottom: '20px'}}>{editingAppointment ? 'Editar Agendamento' : 'Agendar Horário'}</h1>
+                            <div className="page-header">
+                                <h1>{editingAppointment ? 'Editar Agendamento' : 'Agendar Horário'}</h1>
+                                <p>Preencha os dados abaixo para {editingAppointment ? 'atualizar' : 'criar'} um agendamento.</p>
+                            </div>
                             <AppointmentForm
                                 key={editingAppointment ? editingAppointment.id : 'novo'}
                                 onAppointmentAdded={handleAppointmentSaved}
@@ -158,7 +227,10 @@ function App() {
 
                     {currentView === 'lista' && (
                         <div>
-                            <h1 style={{marginBottom: '20px'}}>Gestão de Agenda</h1>
+                            <div className="page-header">
+                                <h1>Gestão de Agenda</h1>
+                                <p>Veja o calendário completo e a lista detalhada dos seus horários.</p>
+                            </div>
                             <label className="visually-hidden" htmlFor="busca-agendamentos">Buscar por cliente ou serviço</label>
                             <input
                                 id="busca-agendamentos"
@@ -166,8 +238,7 @@ function App() {
                                 placeholder="🔍 Buscar por cliente ou serviço..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="form-field"
-                                style={{ width: '100%', maxWidth: '400px', marginBottom: '20px' }}
+                                className="form-field search-field"
                             />
                             <AppointmentList
                                 appointments={appointments}
@@ -178,19 +249,31 @@ function App() {
                         </div>
                     )}
 
+                    {currentView === 'profissionais' && (
+                        <div>
+                            <div className="page-header">
+                                <h1>Profissionais</h1>
+                                <p>Cadastre a equipe que atende os clientes para poder escolher quem atende cada agendamento.</p>
+                            </div>
+                            <Professionals />
+                        </div>
+                    )}
+
                     {currentView === 'testes' && (
                         <div>
                             <div className="dashboard-header">
-                                <h1>Automação de Testes (CI)</h1>
+                                <div className="page-header" style={{ marginBottom: 0 }}>
+                                    <h1>Automação de Testes (CI)</h1>
+                                </div>
                                 {testStatus === 'pendente' && <div className="status-badge pendente">⏳ Status: Aguardando Execução</div>}
                                 {testStatus === 'sucesso' && <div className="status-badge sucesso">✅ Status: Todos os testes passaram!</div>}
                                 {testStatus === 'falha' && <div className="status-badge falha">❌ Status: Falha nos testes</div>}
                             </div>
-                            
-                            <p style={{ color: '#666', marginBottom: '20px' }}>
+
+                            <p style={{ color: 'var(--color-text-soft)', marginBottom: '20px' }}>
                                 Validação contínua do Backend (FastAPI). Clique no botão abaixo para capturar o último log gerado pelo Pytest.
                             </p>
-                            
+
                             <button
                                 disabled={runningTests}
                                 onClick={async () => {
@@ -244,8 +327,10 @@ function App() {
                     )}
                     {currentView === 'usuarios' && (
                         <div>
-                            <h1 style={{marginBottom: '20px'}}>Gestão de Acesso</h1>
-                            <p style={{ color: '#666' }}>Visualize as contas com permissão de administrador no painel.</p>
+                            <div className="page-header">
+                                <h1>Gestão de Acesso</h1>
+                                <p>Visualize as contas com permissão de administrador no painel.</p>
+                            </div>
                             <UserList />
                         </div>
                     )}

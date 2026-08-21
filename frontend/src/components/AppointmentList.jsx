@@ -8,6 +8,17 @@ import 'react-big-calendar/lib/css/react-big-calendar.css';
 
 const locales = { 'pt-BR': ptBR };
 
+// @username do bot do Telegram usado no lembrete de "faltam 2h" (ver
+// backend/notifications.py e TELEGRAM_BOT_USERNAME no .env.example). Sem
+// essa variável, o botão de ativação simplesmente não aparece.
+const TELEGRAM_BOT_USERNAME = import.meta.env.VITE_TELEGRAM_BOT_USERNAME;
+
+const FILTROS_PERIODO = [
+    { key: 'todos', label: 'Todos' },
+    { key: 'proximos', label: 'Próximos' },
+    { key: 'passados', label: 'Já ocorreram' },
+];
+
 const localizer = dateFnsLocalizer({
   format,
   parse,
@@ -47,10 +58,10 @@ const CustomToolbar = (toolbar) => {
                 <button type="button" onClick={goToNext}>Próximo</button>
             </span>
             <span className="rbc-toolbar-label" style={{ display: 'flex', gap: '10px', justifyContent: 'center', alignItems: 'center' }}>
-                <select value={toolbar.date.getMonth()} onChange={handleMesChange} style={{ padding: '6px 10px', borderRadius: '4px', border: '1px solid #ccc' }}>
+                <select value={toolbar.date.getMonth()} onChange={handleMesChange} className="calendar-select">
                     {meses.map((mes, index) => <option key={index} value={index}>{mes}</option>)}
                 </select>
-                <select value={toolbar.date.getFullYear()} onChange={handleAnoChange} style={{ padding: '6px 10px', borderRadius: '4px', border: '1px solid #ccc' }}>
+                <select value={toolbar.date.getFullYear()} onChange={handleAnoChange} className="calendar-select">
                     {anos.map((ano) => <option key={ano} value={ano}>{ano}</option>)}
                 </select>
             </span>
@@ -67,13 +78,30 @@ const CustomToolbar = (toolbar) => {
 export default function AppointmentList({ appointments, onAppointmentDeleted, onEdit, isFiltered }) {
     const [currentDate, setCurrentDate] = useState(new Date());
     const [currentView, setCurrentView] = useState('month');
-    
+    const [timeFilter, setTimeFilter] = useState('todos');
+
     // --- ESTADOS DO MODAL DE EXCLUSÃO ---
     const [showModal, setShowModal] = useState(false);
     const [eventToDelete, setEventToDelete] = useState(null);
     const [deleting, setDeleting] = useState(false);
 
-    const calendarEvents = appointments.map((appt) => {
+    const agora = new Date();
+    const appointmentsFiltrados = appointments.filter((appt) => {
+        if (timeFilter === 'todos') return true;
+        const eFuturo = new Date(appt.date_time) >= agora;
+        return timeFilter === 'proximos' ? eFuturo : !eFuturo;
+    });
+
+    let mensagemVazia = 'Nenhum agendamento encontrado.';
+    let iconeVazio = '🗓️';
+    if (isFiltered) {
+        mensagemVazia = 'Nenhum resultado para essa busca.';
+        iconeVazio = '🔍';
+    } else if (timeFilter !== 'todos' && appointments.length > 0) {
+        mensagemVazia = timeFilter === 'proximos' ? 'Nenhum agendamento futuro.' : 'Nenhum agendamento passado.';
+    }
+
+    const calendarEvents = appointmentsFiltrados.map((appt) => {
         const dataAgendamento = new Date(appt.date_time);
         return {
             id: appt.id,
@@ -128,7 +156,20 @@ export default function AppointmentList({ appointments, onAppointmentDeleted, on
                 </div>
             )}
 
-            <div style={{ height: '500px', marginBottom: '40px', backgroundColor: 'white', padding: '15px', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+            <div className="segmented-control" role="group" aria-label="Filtrar agendamentos por período">
+                {FILTROS_PERIODO.map((filtro) => (
+                    <button
+                        key={filtro.key}
+                        type="button"
+                        className={timeFilter === filtro.key ? 'active' : ''}
+                        onClick={() => setTimeFilter(filtro.key)}
+                    >
+                        {filtro.label}
+                    </button>
+                ))}
+            </div>
+
+            <div className="calendar-card">
                 <Calendar
                     localizer={localizer}
                     events={calendarEvents}
@@ -145,25 +186,51 @@ export default function AppointmentList({ appointments, onAppointmentDeleted, on
                 />
             </div>
 
-            <h3 style={{ borderBottom: '2px solid #eee', paddingBottom: '10px', marginBottom: '15px' }}>Lista Detalhada</h3>
-            {appointments.length === 0 ? (
+            <h3 className="section-title">Lista Detalhada</h3>
+            {appointmentsFiltrados.length === 0 ? (
                 <div className="empty-state">
-                    <span className="empty-state-icon" aria-hidden="true">{isFiltered ? '🔍' : '🗓️'}</span>
-                    <p>{isFiltered ? 'Nenhum resultado para essa busca.' : 'Nenhum agendamento encontrado.'}</p>
+                    <span className="empty-state-icon" aria-hidden="true">{iconeVazio}</span>
+                    <p>{mensagemVazia}</p>
                 </div>
             ) : (
-                <ul style={{ listStyleType: 'none', padding: 0 }}>
-                    {appointments.map((appt) => (
-                        <li key={appt.id} style={{ padding: '15px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-                            <div>
-                                <strong>{appt.client_name}</strong> - {appt.service}
-                                {appt.client_email && (
-                                    <span title={`Confirmação enviada para ${appt.client_email}`} aria-label={`E-mail cadastrado: ${appt.client_email}`}> 📧</span>
-                                )}
-                                <br/>
-                                <span style={{ color: '#666' }}>{new Date(appt.date_time).toLocaleString('pt-BR')}</span>
+                <ul className="list-panel" style={{ listStyleType: 'none' }}>
+                    {appointmentsFiltrados.map((appt) => (
+                        <li key={appt.id} className="list-item">
+                            <div className="list-item-info">
+                                <div className="avatar-circle" aria-hidden="true">
+                                    {appt.client_name.slice(0, 2).toUpperCase()}
+                                </div>
+                                <div>
+                                    <div className="list-item-title">
+                                        {appt.client_name} <span style={{ fontWeight: 400, color: 'var(--color-text-soft)' }}>· {appt.service}</span>
+                                        {appt.client_email && (
+                                            <span title={`Confirmação enviada para ${appt.client_email}`} aria-label={`E-mail cadastrado: ${appt.client_email}`}> 📧</span>
+                                        )}
+                                    </div>
+                                    <div className="list-item-subtitle">
+                                        {new Date(appt.date_time).toLocaleString('pt-BR')}
+                                        {appt.professional_name && ` · com ${appt.professional_name}`}
+                                    </div>
+                                </div>
                             </div>
-                            <div style={{ display: 'flex', gap: '8px' }}>
+                            <div className="list-item-actions">
+                                {appt.client_phone && TELEGRAM_BOT_USERNAME && (
+                                    appt.telegram_linked ? (
+                                        <span className="pill pill-active" title="O cliente já ativou o lembrete no Telegram">
+                                            🔔 Lembrete ativo
+                                        </span>
+                                    ) : (
+                                        <a
+                                            href={`https://t.me/${TELEGRAM_BOT_USERNAME}?start=${appt.telegram_link_token}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="btn btn-secondary btn-sm"
+                                            title="Envie este link para o cliente ativar o lembrete no Telegram"
+                                        >
+                                            🔔 Ativar lembrete
+                                        </a>
+                                    )
+                                )}
                                 <button onClick={() => onEdit && onEdit(appt)} className="btn btn-primary btn-sm">
                                     Editar
                                 </button>

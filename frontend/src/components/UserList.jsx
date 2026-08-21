@@ -58,11 +58,11 @@ export default function UserList() {
     };
 
     return (
-        <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', marginTop: '20px' }}>
-            <h3 style={{ borderBottom: '2px solid #eee', paddingBottom: '10px', marginBottom: '15px', color: '#2c3e50' }}>
+        <div className="list-panel" style={{ padding: '4px 0' }}>
+            <h3 className="section-title" style={{ padding: '18px 18px 12px', marginBottom: 0 }}>
                 Administradores do Sistema
             </h3>
-            
+
             {loading ? (
                 <div className="empty-state">
                     <span className="spinner spinner-dark" aria-hidden="true" style={{ width: '24px', height: '24px', margin: '0 auto 10px' }} />
@@ -74,29 +74,24 @@ export default function UserList() {
                     <p>Nenhum usuário encontrado.</p>
                 </div>
             ) : (
-                <ul style={{ listStyleType: 'none', padding: 0 }}>
+                <ul style={{ listStyleType: 'none' }}>
                     {users.map((user) => (
-                        <li key={user.id} style={{ 
-                            padding: '15px', 
-                            borderBottom: '1px solid #eee', 
-                            display: 'flex', 
-                            justifyContent: 'space-between', 
-                            alignItems: 'center'
-                        }}>
-                            <div>
-                                <strong style={{ fontSize: '1.1rem' }}>{user.username}</strong> <br/>
-                                <span style={{ color: '#7f8c8d', fontSize: '0.9rem' }}>ID: #{user.id}</span>
+                        <li key={user.id} className="list-item">
+                            <div className="list-item-info">
+                                <div className="avatar-circle" aria-hidden="true">
+                                    {user.username.slice(0, 2).toUpperCase()}
+                                </div>
+                                <div>
+                                    <div className="list-item-title">{user.username}</div>
+                                    <div className="list-item-subtitle">ID: #{user.id}</div>
+                                </div>
                             </div>
-                            
-                            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+
+                            <div className="list-item-actions" style={{ alignItems: 'center' }}>
                                 {user.role === 'admin' && (
-                                    <span style={{ backgroundColor: '#f39c12', color: 'white', padding: '5px 12px', borderRadius: '15px', fontSize: '0.8rem', fontWeight: 'bold' }}>
-                                        👑 Admin
-                                    </span>
+                                    <span className="pill pill-admin">👑 Admin</span>
                                 )}
-                                <span style={{ backgroundColor: '#2ecc71', color: 'white', padding: '5px 12px', borderRadius: '15px', fontSize: '0.8rem', fontWeight: 'bold' }}>
-                                    ✅ Ativo
-                                </span>
+                                <span className="pill pill-active">✅ Ativo</span>
 
                                 {/* O botão só aparece para admins, e nunca para a própria conta logada */}
                                 {isAdmin && user.username !== currentUser.username && (

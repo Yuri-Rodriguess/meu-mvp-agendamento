@@ -38,45 +38,52 @@ export default function Login({ setToken }) {
     };
 
     return (
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: 'var(--color-text)', padding: '20px' }}>
-            <div style={{ background: 'white', padding: '40px', borderRadius: 'var(--radius)', boxShadow: '0 4px 15px rgba(0,0,0,0.2)', width: '100%', maxWidth: '350px' }}>
-                <h2 style={{ textAlign: 'center', marginBottom: '20px', color: 'var(--color-text)' }}>
-                    {isRegistering ? 'Nova Conta' : 'Acesso Restrito'}
-                </h2>
-                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                    <label className="visually-hidden" htmlFor="login-username">Nome de usuário</label>
-                    <input
-                        id="login-username"
-                        type="text"
-                        placeholder="Nome de usuário"
-                        value={username}
-                        onChange={e => setUsername(e.target.value)}
-                        required
-                        autoComplete="username"
-                        className="form-field"
-                    />
-                    <label className="visually-hidden" htmlFor="login-password">Senha</label>
-                    <input
-                        id="login-password"
-                        type="password"
-                        placeholder="Senha"
-                        value={password}
-                        onChange={e => setPassword(e.target.value)}
-                        required
-                        autoComplete={isRegistering ? 'new-password' : 'current-password'}
-                        className="form-field"
-                    />
-                    <button type="submit" disabled={loading} className="btn btn-primary btn-block">
-                        {loading && <span className="spinner" aria-hidden="true" />}
-                        {loading ? 'Aguarde...' : isRegistering ? 'Cadastrar' : 'Entrar'}
-                    </button>
-                </form>
-                <p
-                    style={{ textAlign: 'center', marginTop: '20px', cursor: 'pointer', color: 'var(--color-text-soft)', fontSize: '14px' }}
-                    onClick={() => setIsRegistering(!isRegistering)}
-                >
-                    {isRegistering ? 'Já tenho uma conta. Fazer Login.' : 'Não tem conta? Crie uma aqui.'}
-                </p>
+        <div className="login-page">
+            <div className="login-shell">
+                <div className="login-brand-panel" aria-hidden="true">
+                    <div className="login-brand-icon">📅</div>
+                    <h1>Painel Ágil</h1>
+                    <p>Gerencie agendamentos, acompanhe sua agenda e mantenha o controle da sua equipe em um só lugar.</p>
+                </div>
+                <div className="login-form-panel">
+                    <div className="login-card">
+                        <h2>{isRegistering ? 'Nova Conta' : 'Acesso Restrito'}</h2>
+                        <p className="login-subtitle">
+                            {isRegistering ? 'Crie sua conta para começar a agendar.' : 'Entre com suas credenciais para continuar.'}
+                        </p>
+                        <form onSubmit={handleSubmit} className="login-form">
+                            <label className="visually-hidden" htmlFor="login-username">Nome de usuário</label>
+                            <input
+                                id="login-username"
+                                type="text"
+                                placeholder="Nome de usuário"
+                                value={username}
+                                onChange={e => setUsername(e.target.value)}
+                                required
+                                autoComplete="username"
+                                className="form-field"
+                            />
+                            <label className="visually-hidden" htmlFor="login-password">Senha</label>
+                            <input
+                                id="login-password"
+                                type="password"
+                                placeholder="Senha"
+                                value={password}
+                                onChange={e => setPassword(e.target.value)}
+                                required
+                                autoComplete={isRegistering ? 'new-password' : 'current-password'}
+                                className="form-field"
+                            />
+                            <button type="submit" disabled={loading} className="btn btn-primary btn-block">
+                                {loading && <span className="spinner" aria-hidden="true" />}
+                                {loading ? 'Aguarde...' : isRegistering ? 'Cadastrar' : 'Entrar'}
+                            </button>
+                        </form>
+                        <p className="login-switch" onClick={() => setIsRegistering(!isRegistering)}>
+                            {isRegistering ? 'Já tenho uma conta. Fazer Login.' : 'Não tem conta? Crie uma aqui.'}
+                        </p>
+                    </div>
+                </div>
             </div>
         </div>
     );

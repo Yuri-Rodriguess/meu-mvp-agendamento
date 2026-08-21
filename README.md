@@ -21,6 +21,10 @@ O projeto foi construído utilizando uma arquitetura moderna cliente-servidor:
 - [x] **Rotina Autônoma (Background Task):** Agendador interno (APScheduler) configurado para executar testes automáticos de integridade todos os dias às 22h.
 - [x] **CI real (GitHub Actions):** todo push/PR roda o Pytest do backend e o lint + testes + build do frontend automaticamente — o dashboard e o agendador continuam existindo, mas quem garante que a branch está saudável agora é o CI, não um clique manual.
 - [x] **E-mail de confirmação (opcional):** se o cliente tiver e-mail cadastrado no agendamento, recebe uma confirmação automática assim que ele é criado (requer configurar um SMTP — ver `.env.example`; sem isso, o app funciona normal e só não manda o e-mail).
+- [x] **Lembrete grátis via Telegram (opcional):** 2h antes do horário, um bot manda uma mensagem pro cliente lembrando do agendamento — ver seção [🔔 Lembrete via Telegram](#-lembrete-via-telegram) abaixo.
+- [x] **Filtro de período na agenda:** na tela "Verificar Cadastros", dá pra alternar entre ver todos os agendamentos, só os próximos ou só os que já aconteceram.
+- [x] **Tema claro/escuro e cor de marca personalizável:** o painel pode ser rebrandeado (cor principal + secundária) para combinar com a identidade de cada salão/barbearia/clínica, com alternância rápida entre tema claro e escuro — ver seção [🎨 Aparência](#-aparência) abaixo.
+- [x] **Profissionais/equipe:** cada conta cadastra sua própria equipe (aba "Profissionais") e escolhe, na hora de agendar, quem vai atender — útil pra quem tem mais de um funcionário atendendo. Campo opcional: um agendamento sem profissional escolhido continua funcionando normalmente.
 
 ---
 
@@ -117,7 +121,21 @@ O projeto ainda não está publicado — isso exige criar contas em serviços de
 - Os testes automatizados (`pytest`) rodam contra um banco SQLite isolado (`test_agendamento.db`), não contra `agendamento.db` — assim o pipeline de CI não insere dados fictícios no banco real.
 - `/login` e `/register` têm rate limiting por IP (10 e 5 requisições por minuto, respectivamente), para dificultar ataques de força bruta contra senha. Ao estourar o limite, a API responde `429`.
 - O access token dura só 30 minutos. `/login` também devolve um refresh token (7 dias); o frontend usa `/refresh` para renovar o access token silenciosamente quando ele expira, sem pedir login de novo. Se o refresh token também estiver inválido/expirado, o usuário é deslogado com aviso.
+- O link de ativação do lembrete no Telegram (`telegram_link_token`) funciona como um convite: quem abrir o link primeiro e apertar "Iniciar" é quem passa a receber os lembretes daquele agendamento. Compartilhe o link só com o próprio cliente.
 
 ## 📧 E-mail de confirmação
 
-Não usamos nenhum serviço de terceiros pago — o envio é feito por SMTP puro (`smtplib`, já vem no Python). Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD` e `SMTP_FROM_EMAIL` em `backend/.env` (veja o `.env.example` para um exemplo usando Gmail). Sem essas variáveis, o app roda normalmente e apenas registra no log que pulou o envio — nunca falha a criação do agendamento por causa de e-mail. Só cobre e-mail por enquanto; SMS ficaria por conta de um serviço de terceiros (Twilio e similares), que exige uma conta e número próprios — não incluído aqui.
+Não usamos nenhum serviço de terceiros pago — o envio é feito por SMTP puro (`smtplib`, já vem no Python). Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD` e `SMTP_FROM_EMAIL` em `backend/.env` (veja o `.env.example` para um exemplo usando Gmail). Sem essas variáveis, o app roda normalmente e apenas registra no log que pulou o envio — nunca falha a criação do agendamento por causa de e-mail.
+
+## 🔔 Lembrete via Telegram
+
+Diferente do e-mail, mandar SMS/WhatsApp exigiria uma conta paga de terceiros (Twilio e similares). O Telegram tem uma API de bots gratuita, então foi essa a escolhida — com uma limitação importante: **um bot não consegue escrever para um número/chat que nunca falou com ele antes.** Por isso o fluxo é em duas etapas:
+
+1. **Você cria o bot (grátis, ~2 minutos):** converse com [@BotFather](https://t.me/BotFather) no Telegram, use `/newbot`, escolha um nome e um `@username`. Ele te devolve um **token** — cole em `TELEGRAM_BOT_TOKEN` no `backend/.env`, e o `@username` (sem o `@`) em `TELEGRAM_BOT_USERNAME` no mesmo arquivo **e** em `VITE_TELEGRAM_BOT_USERNAME` no `frontend/.env` (precisa ser igual nos dois).
+2. **O cliente ativa o lembrete:** ao criar um agendamento com celular preenchido, a lista de agendamentos mostra um botão "🔔 Ativar lembrete" — ele abre um link `t.me/<seu_bot>?start=<token>`. Quando o cliente clica em "Iniciar" no Telegram, o app vincula aquele chat ao agendamento automaticamente (via um job que consulta o Telegram a cada 15s) e o botão vira "🔔 Lembrete ativo".
+
+A partir daí, um job que roda a cada 15 minutos (`backend/main.py:enviar_lembretes_pendentes`) verifica quem está a ~2h do horário marcado e ainda não foi avisado, e manda a mensagem. Sem `TELEGRAM_BOT_TOKEN` configurado, esses jobs simplesmente não fazem nada — o app funciona normal, só sem o lembrete (mesmo espírito do e-mail acima). O celular do cliente (`client_phone`) é só um dado de contato para a equipe; ele não dispara nada sozinho — quem manda a mensagem é sempre o vínculo com o Telegram.
+
+## 🎨 Aparência
+
+O botão "Aparência" na barra lateral abre um seletor de tema: alternância entre claro/escuro, combinações de cor prontas (pensadas para salão de beleza, barbearia, spa, etc.) e dois seletores de cor livres (principal + secundária) para quem quiser montar a própria paleta. Também há um atalho rápido de claro/escuro na barra superior. A escolha fica salva no navegador (`localStorage`) — não depende de login nem do backend, então já aparece na própria tela de login.
