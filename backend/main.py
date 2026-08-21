@@ -4,7 +4,8 @@ import sys
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 
-from fastapi import FastAPI, Depends, Header, HTTPException, Request, status
+from fastapi import FastAPI, Depends, Header, HTTPException, Query, Request, status
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -214,9 +215,24 @@ def create_appointment(appointment: schemas.AppointmentCreate, db: Session = Dep
     return db_appointment
 
 @app.get("/appointments/", response_model=list[schemas.AppointmentResponse])
-def list_appointments(db: Session = Depends(get_db), current_user: models.UserDB = Depends(get_current_user)):
+def list_appointments(
+    search: str | None = None,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(200, ge=1, le=500),
+    db: Session = Depends(get_db),
+    current_user: models.UserDB = Depends(get_current_user),
+):
     # Cada usuário só enxerga os próprios agendamentos
-    return db.query(models.AppointmentDB).filter(models.AppointmentDB.owner_id == current_user.id).all()
+    query = db.query(models.AppointmentDB).filter(models.AppointmentDB.owner_id == current_user.id)
+    if search:
+        termo = f"%{search}%"
+        query = query.filter(
+            or_(
+                models.AppointmentDB.client_name.ilike(termo),
+                models.AppointmentDB.service.ilike(termo),
+            )
+        )
+    return query.order_by(models.AppointmentDB.date_time).offset(skip).limit(limit).all()
 
 @app.put("/appointments/{appointment_id}", response_model=schemas.AppointmentResponse)
 def update_appointment(

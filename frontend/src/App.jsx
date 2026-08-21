@@ -16,6 +16,7 @@ function App() {
     const [testStatus, setTestStatus] = useState('pendente');
     const [editingAppointment, setEditingAppointment] = useState(null);
     const [runningTests, setRunningTests] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
 
     const handleLogout = () => {
         localStorage.removeItem('token');
@@ -25,7 +26,9 @@ function App() {
     const fetchAppointments = async () => {
         if (!token) return; // Só busca se tiver token
         try {
-            const response = await api.get('/appointments/');
+            const response = await api.get('/appointments/', {
+                params: searchTerm ? { search: searchTerm } : {},
+            });
             setAppointments(response.data);
         } catch (error) {
             console.error("Erro ao buscar agendamentos", error);
@@ -40,8 +43,14 @@ function App() {
     };
 
     useEffect(() => {
-        fetchAppointments();
-    }, [token]); // Atualiza sempre que o token mudar
+        if (!token) return;
+        // Debounce: espera parar de digitar antes de buscar de novo
+        const timeout = setTimeout(() => {
+            fetchAppointments();
+        }, 300);
+        return () => clearTimeout(timeout);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [token, searchTerm]);
 
     // Fecha o menu lateral com a tecla Esc (acessibilidade de teclado)
     useEffect(() => {
@@ -142,10 +151,21 @@ function App() {
                     {currentView === 'lista' && (
                         <div>
                             <h1 style={{marginBottom: '20px'}}>Gestão de Agenda</h1>
+                            <label className="visually-hidden" htmlFor="busca-agendamentos">Buscar por cliente ou serviço</label>
+                            <input
+                                id="busca-agendamentos"
+                                type="search"
+                                placeholder="🔍 Buscar por cliente ou serviço..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="form-field"
+                                style={{ width: '100%', maxWidth: '400px', marginBottom: '20px' }}
+                            />
                             <AppointmentList
                                 appointments={appointments}
                                 onAppointmentDeleted={fetchAppointments}
                                 onEdit={handleEditAppointment}
+                                isFiltered={Boolean(searchTerm)}
                             />
                         </div>
                     )}

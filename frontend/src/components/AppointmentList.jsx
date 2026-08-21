@@ -64,7 +64,7 @@ const CustomToolbar = (toolbar) => {
     );
 };
 
-export default function AppointmentList({ appointments, onAppointmentDeleted, onEdit }) {
+export default function AppointmentList({ appointments, onAppointmentDeleted, onEdit, isFiltered }) {
     const [currentDate, setCurrentDate] = useState(new Date());
     const [currentView, setCurrentView] = useState('month');
     
@@ -148,8 +148,8 @@ export default function AppointmentList({ appointments, onAppointmentDeleted, on
             <h3 style={{ borderBottom: '2px solid #eee', paddingBottom: '10px', marginBottom: '15px' }}>Lista Detalhada</h3>
             {appointments.length === 0 ? (
                 <div className="empty-state">
-                    <span className="empty-state-icon" aria-hidden="true">🗓️</span>
-                    <p>Nenhum agendamento encontrado.</p>
+                    <span className="empty-state-icon" aria-hidden="true">{isFiltered ? '🔍' : '🗓️'}</span>
+                    <p>{isFiltered ? 'Nenhum resultado para essa busca.' : 'Nenhum agendamento encontrado.'}</p>
                 </div>
             ) : (
                 <ul style={{ listStyleType: 'none', padding: 0 }}>

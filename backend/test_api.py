@@ -91,3 +91,20 @@ def test_editar_agendamento_inexistente_retorna_404():
         json={"client_name": "X", "service": "Y", "date_time": "2026-09-03T09:00:00"},
     )
     assert resposta.status_code == 404
+
+def test_busca_agendamentos_por_nome_ou_servico():
+    """A busca deve filtrar por nome do cliente OU serviço, ignorando maiúsculas/minúsculas"""
+    client.post("/appointments/", json={
+        "client_name": "Maria Fernanda", "service": "Manicure", "date_time": "2026-09-04T09:00:00",
+    })
+    client.post("/appointments/", json={
+        "client_name": "Joao Pedro", "service": "Corte de Cabelo", "date_time": "2026-09-04T10:00:00",
+    })
+
+    por_nome = client.get("/appointments/", params={"search": "maria"})
+    assert por_nome.status_code == 200
+    assert any(a["client_name"] == "Maria Fernanda" for a in por_nome.json())
+    assert all("joao" not in a["client_name"].lower() for a in por_nome.json())
+
+    por_servico = client.get("/appointments/", params={"search": "corte"})
+    assert any(a["service"] == "Corte de Cabelo" for a in por_servico.json())

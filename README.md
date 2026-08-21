@@ -13,7 +13,7 @@ O projeto foi construído utilizando uma arquitetura moderna cliente-servidor:
 * **Qualidade e Automação:** Pytest (Testes de integração) e APScheduler (Cron Jobs).
 
 ## ✨ Funcionalidades Entregues
-- [x] **Gestão de Agendamentos (CRUD):** Criação, listagem e cancelamento de horários.
+- [x] **Gestão de Agendamentos (CRUD):** Criação, listagem, edição e cancelamento de horários, com busca por cliente/serviço.
 - [x] **Visualização Avançada:** Calendário interativo mensal/semanal (estilo Google Calendar) com filtros dinâmicos.
 - [x] **Dashboard de CI/CD:** Tela dedicada no frontend que aciona e exibe logs do Pytest rodando no servidor em tempo real.
 - [x] **Rotina Autônoma (Background Task):** Agendador interno (APScheduler) configurado para executar testes automáticos de integridade todos os dias às 22h.
