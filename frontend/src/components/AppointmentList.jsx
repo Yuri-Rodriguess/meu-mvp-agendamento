@@ -71,6 +71,7 @@ export default function AppointmentList({ appointments, onAppointmentDeleted, on
     // --- ESTADOS DO MODAL DE EXCLUSÃO ---
     const [showModal, setShowModal] = useState(false);
     const [eventToDelete, setEventToDelete] = useState(null);
+    const [deleting, setDeleting] = useState(false);
 
     const calendarEvents = appointments.map((appt) => {
         const dataAgendamento = new Date(appt.date_time);
@@ -92,18 +93,19 @@ export default function AppointmentList({ appointments, onAppointmentDeleted, on
     // Função que realmente vai no banco e deleta
     const confirmDelete = async () => {
         if (!eventToDelete) return;
-        
+
+        setDeleting(true);
         try {
             await api.delete(`/appointments/${eventToDelete.id}`);
-            onAppointmentDeleted(); 
+            onAppointmentDeleted();
             toast.success("Agendamento cancelado com sucesso!"); // Toast animado!
+            setShowModal(false);
+            setEventToDelete(null);
         } catch (error) {
             console.error("Erro ao deletar agendamento", error);
             toast.error("Erro ao cancelar o agendamento.");
         } finally {
-            // Fecha o modal e limpa a seleção independentemente de dar erro ou sucesso
-            setShowModal(false);
-            setEventToDelete(null);
+            setDeleting(false);
         }
     };
 
@@ -116,8 +118,11 @@ export default function AppointmentList({ appointments, onAppointmentDeleted, on
                         <h3>⚠️ Cancelar Agendamento?</h3>
                         <p>Você tem certeza que deseja cancelar o agendamento de:<br/> <strong>{eventToDelete?.title}</strong>?</p>
                         <div className="modal-actions">
-                            <button className="btn-cancel" onClick={() => setShowModal(false)}>Voltar</button>
-                            <button className="btn-confirm" onClick={confirmDelete}>Sim, Cancelar</button>
+                            <button className="btn-cancel" onClick={() => setShowModal(false)} disabled={deleting}>Voltar</button>
+                            <button className="btn-confirm" onClick={confirmDelete} disabled={deleting}>
+                                {deleting && <span className="spinner" aria-hidden="true" />}
+                                {deleting ? 'Cancelando...' : 'Sim, Cancelar'}
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -142,25 +147,25 @@ export default function AppointmentList({ appointments, onAppointmentDeleted, on
 
             <h3 style={{ borderBottom: '2px solid #eee', paddingBottom: '10px', marginBottom: '15px' }}>Lista Detalhada</h3>
             {appointments.length === 0 ? (
-                <p>Nenhum agendamento encontrado.</p>
+                <div className="empty-state">
+                    <span className="empty-state-icon" aria-hidden="true">🗓️</span>
+                    <p>Nenhum agendamento encontrado.</p>
+                </div>
             ) : (
                 <ul style={{ listStyleType: 'none', padding: 0 }}>
                     {appointments.map((appt) => (
-                        <li key={appt.id} style={{ padding: '15px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <li key={appt.id} style={{ padding: '15px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
                             <div>
                                 <strong>{appt.client_name}</strong> - {appt.service} <br/>
                                 <span style={{ color: '#666' }}>{new Date(appt.date_time).toLocaleString('pt-BR')}</span>
                             </div>
                             <div style={{ display: 'flex', gap: '8px' }}>
-                                <button
-                                    onClick={() => onEdit && onEdit(appt)}
-                                    style={{ backgroundColor: '#007BFF', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '5px', cursor: 'pointer' }}
-                                >
+                                <button onClick={() => onEdit && onEdit(appt)} className="btn btn-primary btn-sm">
                                     Editar
                                 </button>
                                 <button
                                     onClick={() => handleSelectEvent({ id: appt.id, title: appt.client_name })}
-                                    style={{ backgroundColor: '#DC3545', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '5px', cursor: 'pointer' }}
+                                    className="btn btn-danger btn-sm"
                                 >
                                     Cancelar
                                 </button>

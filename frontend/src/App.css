@@ -1,4 +1,22 @@
 /* src/App.css */
+:root {
+  --color-primary: #3498db;
+  --color-primary-dark: #2980b9;
+  --color-danger: #e74c3c;
+  --color-danger-dark: #c0392b;
+  --color-success: #2ecc71;
+  --color-muted: #95a5a6;
+  --color-text: #2c3e50;
+  --color-text-soft: #7f8c8d;
+  --color-bg: #f4f7f6;
+  --color-border: #dfe4e6;
+  --radius: 8px;
+  --radius-sm: 5px;
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+  --transition: 0.2s ease;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -7,8 +25,126 @@
 
 body {
   font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  background-color: #f4f7f6;
+  background-color: var(--color-bg);
   color: #333;
+}
+
+/* Sempre visível ao navegar por teclado, some no clique do mouse */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+li:focus-visible {
+  outline: 3px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Some da tela, mas continua acessível para leitores de tela */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* --- Botões reutilizáveis --- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-weight: bold;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: background-color var(--transition), transform 0.1s ease, opacity var(--transition);
+}
+.btn:active {
+  transform: scale(0.98);
+}
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+  transform: none;
+}
+.btn-block {
+  width: 100%;
+}
+.btn-primary {
+  background-color: var(--color-primary);
+  color: white;
+}
+.btn-primary:hover:not(:disabled) {
+  background-color: var(--color-primary-dark);
+}
+.btn-danger {
+  background-color: var(--color-danger);
+  color: white;
+}
+.btn-danger:hover:not(:disabled) {
+  background-color: var(--color-danger-dark);
+}
+.btn-secondary {
+  background-color: #ecf0f1;
+  color: var(--color-text);
+}
+.btn-secondary:hover:not(:disabled) {
+  background-color: #dfe4e6;
+}
+.btn-sm {
+  padding: 8px 12px;
+  font-size: 0.85rem;
+}
+
+/* Spinner usado dentro de botões durante requisições */
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+.spinner-dark {
+  border-color: rgba(44, 62, 80, 0.25);
+  border-top-color: var(--color-text);
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* --- Campos de formulário reutilizáveis --- */
+.form-field {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid #ccc;
+  font-size: 1rem;
+  font-family: inherit;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+.form-field:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.15);
+}
+
+/* --- Estado vazio (listas sem itens) --- */
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--color-text-soft);
+}
+.empty-state .empty-state-icon {
+  font-size: 2.5rem;
+  display: block;
+  margin-bottom: 10px;
 }
 
 .app-container {
@@ -33,6 +169,21 @@ body {
   left: 0; /* Desliza o menu para dentro da tela */
 }
 
+/* Escurece o restante da tela quando o menu está aberto no celular,
+   e permite fechar o menu clicando fora dele */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 999;
+}
+@media (max-width: 767px) {
+  .sidebar-overlay.open {
+    display: block;
+  }
+}
+
 .sidebar h2 {
   text-align: center;
   margin-bottom: 30px;
@@ -45,15 +196,29 @@ body {
 }
 
 .sidebar li {
+  border-bottom: 1px solid #34495e;
+}
+
+/* Os itens do menu são <button> reais dentro do <li> (não apenas o <li>
+   com onClick), para que fiquem navegáveis por teclado/leitor de tela */
+.sidebar-link {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-left: 4px solid transparent;
+  color: inherit;
+  font: inherit;
   padding: 15px 25px;
   cursor: pointer;
-  border-bottom: 1px solid #34495e;
   transition: 0.2s;
 }
 
-.sidebar li:hover, .sidebar li.active {
+.sidebar-link:hover,
+.sidebar li.active .sidebar-link {
   background-color: #34495e;
-  border-left: 4px solid #3498db;
+  border-left-color: var(--color-primary);
 }
 
 /* Estilos do Conteúdo Principal */
@@ -74,9 +239,14 @@ body {
   font-size: 24px;
   background: none;
   border: none;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  color: #2c3e50;
+  color: var(--color-text);
   margin-bottom: 20px;
+  transition: background-color var(--transition);
+}
+.hamburger-btn:hover {
+  background-color: rgba(0, 0, 0, 0.05);
 }
 
 .close-btn {
@@ -86,8 +256,13 @@ body {
   font-size: 24px;
   background: none;
   border: none;
+  border-radius: var(--radius-sm);
   color: white;
   cursor: pointer;
+  transition: background-color var(--transition);
+}
+.close-btn:hover {
+  background-color: rgba(255, 255, 255, 0.1);
 }
 
 /* Card Branco para as Telas */
@@ -207,7 +382,7 @@ body {
   padding: 30px;
   border-radius: 8px;
   box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-  max-width: 400px;
+  width: min(400px, 90vw);
   text-align: center;
   animation: fadeIn 0.2s ease-in-out;
 }
@@ -231,26 +406,26 @@ body {
   margin-top: 25px;
 }
 
-.btn-cancel {
-  padding: 10px 20px;
-  border: none;
-  background: #ecf0f1;
-  color: #2c3e50;
-  border-radius: 5px;
-  cursor: pointer;
-  font-weight: bold;
-  transition: 0.2s;
-}
-.btn-cancel:hover { background: #bdc3c7; }
-
+.btn-cancel,
 .btn-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   padding: 10px 20px;
   border: none;
-  background: #e74c3c;
-  color: white;
   border-radius: 5px;
   cursor: pointer;
   font-weight: bold;
   transition: 0.2s;
 }
-.btn-confirm:hover { background: #c0392b; }
+.btn-cancel:disabled,
+.btn-confirm:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.btn-cancel { background: #ecf0f1; color: #2c3e50; }
+.btn-cancel:hover:not(:disabled) { background: #bdc3c7; }
+
+.btn-confirm { background: #e74c3c; color: white; }
+.btn-confirm:hover:not(:disabled) { background: #c0392b; }

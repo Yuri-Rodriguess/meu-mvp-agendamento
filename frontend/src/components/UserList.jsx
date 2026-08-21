@@ -19,7 +19,9 @@ const getLoggedUsername = () => {
 
 export default function UserList() {
     const [users, setUsers] = useState([]);
-    
+    const [loading, setLoading] = useState(true);
+    const [deletingId, setDeletingId] = useState(null);
+
     // Descobre quem é o usuário atual e se ele é o Super Admin
     const currentUser = getLoggedUsername();
     const isSuperAdmin = currentUser && currentUser.toLowerCase() === 'yuri';
@@ -31,6 +33,8 @@ export default function UserList() {
                 setUsers(response.data);
             } catch (error) {
                 toast.error(error.response?.data?.detail || "Erro ao carregar a lista de administradores.");
+            } finally {
+                setLoading(false);
             }
         };
         fetchUsers();
@@ -40,12 +44,15 @@ export default function UserList() {
         const confirm = window.confirm(`ALERTA: Tem certeza que deseja banir o administrador "${username}" do sistema?`);
         if (!confirm) return;
 
+        setDeletingId(userId);
         try {
             await api.delete(`/users/${userId}`);
             toast.success(`Administrador ${username} removido com sucesso!`);
-            setUsers(users.filter(u => u.id !== userId)); 
+            setUsers(users.filter(u => u.id !== userId));
         } catch (error) {
             toast.error(error.response?.data?.detail || "Erro ao deletar usuário.");
+        } finally {
+            setDeletingId(null);
         }
     };
 
@@ -55,8 +62,16 @@ export default function UserList() {
                 Administradores do Sistema
             </h3>
             
-            {users.length === 0 ? (
-                <p>Nenhum usuário encontrado.</p>
+            {loading ? (
+                <div className="empty-state">
+                    <span className="spinner spinner-dark" aria-hidden="true" style={{ width: '24px', height: '24px', margin: '0 auto 10px' }} />
+                    <p>Carregando administradores...</p>
+                </div>
+            ) : users.length === 0 ? (
+                <div className="empty-state">
+                    <span className="empty-state-icon" aria-hidden="true">👥</span>
+                    <p>Nenhum usuário encontrado.</p>
+                </div>
             ) : (
                 <ul style={{ listStyleType: 'none', padding: 0 }}>
                     {users.map((user) => (
@@ -79,11 +94,13 @@ export default function UserList() {
                                 
                                 {/* O botão só aparece se for o Yuri logado E se o usuário da linha não for o próprio Yuri */}
                                 {isSuperAdmin && user.username.toLowerCase() !== 'yuri' && (
-                                    <button 
+                                    <button
                                         onClick={() => handleDeleteUser(user.id, user.username)}
-                                        style={{ backgroundColor: '#e74c3c', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}
+                                        disabled={deletingId === user.id}
+                                        className="btn btn-danger btn-sm"
                                     >
-                                        Deletar
+                                        {deletingId === user.id && <span className="spinner" aria-hidden="true" />}
+                                        {deletingId === user.id ? 'Removendo...' : 'Deletar'}
                                     </button>
                                 )}
                             </div>

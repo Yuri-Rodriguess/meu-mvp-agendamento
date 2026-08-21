@@ -15,6 +15,7 @@ function App() {
     const [currentView, setCurrentView] = useState('cadastro');
     const [testStatus, setTestStatus] = useState('pendente');
     const [editingAppointment, setEditingAppointment] = useState(null);
+    const [runningTests, setRunningTests] = useState(false);
 
     const handleLogout = () => {
         localStorage.removeItem('token');
@@ -41,6 +42,17 @@ function App() {
     useEffect(() => {
         fetchAppointments();
     }, [token]); // Atualiza sempre que o token mudar
+
+    // Fecha o menu lateral com a tecla Esc (acessibilidade de teclado)
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape') {
+                setIsMenuOpen(false);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
 
     const handleMenuClick = (view) => {
         setCurrentView(view);
@@ -70,30 +82,47 @@ function App() {
         <div className="app-container">
             {/* --- MENU LATERAL --- */}
             <div className={`sidebar ${isMenuOpen ? 'open' : ''}`}>
-                <button className="close-btn" onClick={() => setIsMenuOpen(false)}>×</button>
+                <button className="close-btn" onClick={() => setIsMenuOpen(false)} aria-label="Fechar menu">×</button>
                 <h2>Painel Ágil</h2>
                 <ul>
-                    <li className={currentView === 'cadastro' ? 'active' : ''} onClick={() => handleMenuClick('cadastro')}>
-                        📅 Fazer um Cadastro
+                    <li className={currentView === 'cadastro' ? 'active' : ''}>
+                        <button className="sidebar-link" onClick={() => handleMenuClick('cadastro')}>
+                            📅 Fazer um Cadastro
+                        </button>
                     </li>
-                    <li className={currentView === 'lista' ? 'active' : ''} onClick={() => handleMenuClick('lista')}>
-                        📋 Verificar Cadastros
+                    <li className={currentView === 'lista' ? 'active' : ''}>
+                        <button className="sidebar-link" onClick={() => handleMenuClick('lista')}>
+                            📋 Verificar Cadastros
+                        </button>
                     </li>
-                    <li className={currentView === 'testes' ? 'active' : ''} onClick={() => handleMenuClick('testes')}>
-                        ⚙️ Resultados de Testes
+                    <li className={currentView === 'testes' ? 'active' : ''}>
+                        <button className="sidebar-link" onClick={() => handleMenuClick('testes')}>
+                            ⚙️ Resultados de Testes
+                        </button>
                     </li>
-                    <li onClick={handleLogout} style={{ color: '#e74c3c', marginTop: '20px', fontWeight: 'bold' }}>
-                        🚪 Sair do Sistema
+                    <li className={currentView === 'usuarios' ? 'active' : ''}>
+                        <button className="sidebar-link" onClick={() => handleMenuClick('usuarios')}>
+                            👥 Administradores
+                        </button>
                     </li>
-                    <li className={currentView === 'usuarios' ? 'active' : ''} onClick={() => handleMenuClick('usuarios')}>
-                        👥 Administradores
+                    <li style={{ marginTop: '20px' }}>
+                        <button className="sidebar-link" onClick={handleLogout} style={{ color: '#e74c3c', fontWeight: 'bold' }}>
+                            🚪 Sair do Sistema
+                        </button>
                     </li>
                 </ul>
             </div>
 
+            {/* Escurece o fundo e permite fechar o menu clicando fora dele (mobile) */}
+            <div
+                className={`sidebar-overlay ${isMenuOpen ? 'open' : ''}`}
+                onClick={() => setIsMenuOpen(false)}
+                aria-hidden="true"
+            />
+
             {/* --- CONTEÚDO PRINCIPAL --- */}
             <div className={`main-content ${isMenuOpen ? 'shifted' : ''}`}>
-                <button className="hamburger-btn" onClick={() => setIsMenuOpen(true)}>
+                <button className="hamburger-btn" onClick={() => setIsMenuOpen(true)} aria-label="Abrir menu">
                     ☰ Menu
                 </button>
 
@@ -134,17 +163,19 @@ function App() {
                                 Validação contínua do Backend (FastAPI). Clique no botão abaixo para capturar o último log gerado pelo Pytest.
                             </p>
                             
-                            <button 
+                            <button
+                                disabled={runningTests}
                                 onClick={async () => {
+                                    setRunningTests(true);
                                     setTestStatus('pendente');
                                     document.getElementById('terminal-testes').innerText = "Iniciando pipeline de testes no servidor...\nExecutando pytest...";
-                                    
+
                                     try {
                                         const response = await runTests();
                                         const logTexto = response.data.log;
-                                        
+
                                         document.getElementById('terminal-testes').innerText = logTexto;
-                                        
+
                                         if (logTexto.includes('FAILED') || logTexto.includes('ERRORS')) {
                                             setTestStatus('falha');
                                         } else if (logTexto.includes('passed')) {
@@ -152,19 +183,22 @@ function App() {
                                         } else {
                                             setTestStatus('pendente');
                                         }
-                                        
+
                                         fetchAppointments();
-                                        
+
                                     } catch (e) {
                                         console.error("Erro na integração", e);
                                         document.getElementById('terminal-testes').innerText = "Falha ao conectar com o Backend.";
                                         setTestStatus('falha');
                                         toast.error(e.response?.data?.detail || 'Falha ao conectar com o backend para rodar os testes.');
+                                    } finally {
+                                        setRunningTests(false);
                                     }
                                 }}
-                                style={{ padding: '10px 20px', backgroundColor: '#007BFF', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}
+                                className="btn btn-primary"
                             >
-                                🔄 Atualizar Log de Testes
+                                {runningTests && <span className="spinner" aria-hidden="true" />}
+                                {runningTests ? 'Rodando...' : '🔄 Atualizar Log de Testes'}
                             </button>
 
                             <div className="terminal-container">

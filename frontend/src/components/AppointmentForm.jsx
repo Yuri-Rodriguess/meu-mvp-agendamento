@@ -9,12 +9,14 @@ export default function AppointmentForm({ onAppointmentAdded, editingAppointment
     const [clientName, setClientName] = useState(editingAppointment?.client_name ?? '');
     const [service, setService] = useState(editingAppointment?.service ?? '');
     const [dateTime, setDateTime] = useState(editingAppointment?.date_time.slice(0, 16) ?? ''); // "AAAA-MM-DDTHH:mm"
+    const [saving, setSaving] = useState(false);
 
     const isEditing = Boolean(editingAppointment);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         const payload = { client_name: clientName, service: service, date_time: dateTime };
+        setSaving(true);
         try {
             if (isEditing) {
                 await api.put(`/appointments/${editingAppointment.id}`, payload);
@@ -39,20 +41,49 @@ export default function AppointmentForm({ onAppointmentAdded, editingAppointment
             } else {
                 toast.error('Erro ao salvar o agendamento.');
             }
+        } finally {
+            setSaving(false);
         }
     };
 
     return (
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px', maxWidth: '400px', backgroundColor: '#fff', padding: '20px', borderRadius: '8px', border: '1px solid #ddd' }}>
-            <input type="text" placeholder="Nome do Cliente" value={clientName} onChange={e => setClientName(e.target.value)} required style={{ padding: '10px', borderRadius: '4px', border: '1px solid #ccc' }} />
-            <input type="text" placeholder="Serviço (ex: Corte de Cabelo)" value={service} onChange={e => setService(e.target.value)} required style={{ padding: '10px', borderRadius: '4px', border: '1px solid #ccc' }} />
-            <input type="datetime-local" value={dateTime} onChange={e => setDateTime(e.target.value)} required style={{ padding: '10px', borderRadius: '4px', border: '1px solid #ccc' }} />
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px', maxWidth: '400px', backgroundColor: '#fff', padding: '20px', borderRadius: 'var(--radius)', border: '1px solid #ddd' }}>
+            <label className="visually-hidden" htmlFor="appt-client-name">Nome do Cliente</label>
+            <input
+                id="appt-client-name"
+                type="text"
+                placeholder="Nome do Cliente"
+                value={clientName}
+                onChange={e => setClientName(e.target.value)}
+                required
+                className="form-field"
+            />
+            <label className="visually-hidden" htmlFor="appt-service">Serviço</label>
+            <input
+                id="appt-service"
+                type="text"
+                placeholder="Serviço (ex: Corte de Cabelo)"
+                value={service}
+                onChange={e => setService(e.target.value)}
+                required
+                className="form-field"
+            />
+            <label className="visually-hidden" htmlFor="appt-date-time">Data e horário</label>
+            <input
+                id="appt-date-time"
+                type="datetime-local"
+                value={dateTime}
+                onChange={e => setDateTime(e.target.value)}
+                required
+                className="form-field"
+            />
             <div style={{ display: 'flex', gap: '10px' }}>
-                <button type="submit" style={{ flex: 1, padding: '10px', backgroundColor: '#007BFF', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
-                    {isEditing ? 'Salvar Alterações' : 'Agendar Horário'}
+                <button type="submit" disabled={saving} className="btn btn-primary" style={{ flex: 1 }}>
+                    {saving && <span className="spinner" aria-hidden="true" />}
+                    {saving ? 'Salvando...' : isEditing ? 'Salvar Alterações' : 'Agendar Horário'}
                 </button>
                 {isEditing && (
-                    <button type="button" onClick={onCancelEdit} style={{ padding: '10px 15px', backgroundColor: '#6c757d', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+                    <button type="button" onClick={onCancelEdit} disabled={saving} className="btn btn-secondary">
                         Cancelar Edição
                     </button>
                 )}
