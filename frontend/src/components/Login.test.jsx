@@ -35,8 +35,10 @@ describe('Login', () => {
         expect(screen.getByRole('button', { name: /^cadastrar$/i })).toBeInTheDocument();
     });
 
-    it('faz login, guarda o token e chama setToken', async () => {
-        api.post.mockResolvedValueOnce({ data: { access_token: 'token-fake', token_type: 'bearer' } });
+    it('faz login e guarda access token + refresh token', async () => {
+        api.post.mockResolvedValueOnce({
+            data: { access_token: 'token-fake', refresh_token: 'refresh-fake', token_type: 'bearer' },
+        });
         const setToken = vi.fn();
         const user = userEvent.setup();
 
@@ -48,6 +50,7 @@ describe('Login', () => {
 
         await waitFor(() => expect(setToken).toHaveBeenCalledWith('token-fake'));
         expect(localStorage.getItem('token')).toBe('token-fake');
+        expect(localStorage.getItem('refresh_token')).toBe('refresh-fake');
         expect(toast.success).toHaveBeenCalled();
     });
 

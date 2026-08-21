@@ -98,7 +98,11 @@ def get_db():
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60
+# O access token dura pouco de propósito (era 60min sem refresh token;
+# agora que existe /refresh, reduzir a exposição em caso de vazamento
+# compensa mais do que a conveniência de durar mais).
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+REFRESH_TOKEN_EXPIRE_DAYS = 7
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
@@ -132,7 +136,13 @@ def _chave_secreta() -> str:
 def create_access_token(data: dict):
     to_encode = data.copy()
     expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
+    to_encode.update({"exp": expire, "type": "access"})
+    return jwt.encode(to_encode, _chave_secreta(), algorithm=ALGORITHM)
+
+def create_refresh_token(data: dict):
+    to_encode = data.copy()
+    expire = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    to_encode.update({"exp": expire, "type": "refresh"})
     return jwt.encode(to_encode, _chave_secreta(), algorithm=ALGORITHM)
 
 # Função que verifica se o usuário está logado em cada requisição
@@ -144,6 +154,10 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     )
     try:
         payload = jwt.decode(token, _chave_secreta(), algorithms=[ALGORITHM])
+        # Garante que um refresh token (de vida longa) não seja aceito
+        # como se fosse um access token
+        if payload.get("type") != "access":
+            raise credentials_exception
         username: str = payload.get("sub")
         if username is None:
             raise credentials_exception
@@ -175,7 +189,36 @@ def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db
         raise HTTPException(status_code=400, detail="Usuário ou senha incorretos")
 
     access_token = create_access_token(data={"sub": user.username})
-    return {"access_token": access_token, "token_type": "bearer"}
+    refresh_token = create_refresh_token(data={"sub": user.username})
+    return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
+
+@app.post("/refresh", response_model=schemas.Token)
+@limiter.limit("20/minute")
+def refresh_access_token(request: Request, body: schemas.RefreshRequest, db: Session = Depends(get_db)):
+    """Troca um refresh token válido por um novo access token, sem exigir
+    login de novo — é o que permite a sessão continuar depois que o access
+    token (de vida curta) expira."""
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Refresh token inválido ou expirado. Faça login novamente.",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(body.refresh_token, _chave_secreta(), algorithms=[ALGORITHM])
+        if payload.get("type") != "refresh":
+            raise credentials_exception
+        username: str = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+
+    user = db.query(models.UserDB).filter(models.UserDB.username == username).first()
+    if user is None:
+        raise credentials_exception
+
+    novo_access_token = create_access_token(data={"sub": user.username})
+    return {"access_token": novo_access_token, "refresh_token": body.refresh_token, "token_type": "bearer"}
 
 # Configuração de CORS para permitir que o React converse com o FastAPI
 app.add_middleware(

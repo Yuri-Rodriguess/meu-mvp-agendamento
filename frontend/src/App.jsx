@@ -20,6 +20,7 @@ function App() {
 
     const handleLogout = () => {
         localStorage.removeItem('token');
+        localStorage.removeItem('refresh_token');
         setToken(null);
     };
 
@@ -32,11 +33,10 @@ function App() {
             setAppointments(response.data);
         } catch (error) {
             console.error("Erro ao buscar agendamentos", error);
-            // Se o token estiver vencido ou inválido, avisa e desloga automaticamente
-            if (error.response && error.response.status === 401) {
-                toast.error('Sua sessão expirou. Faça login novamente.');
-                handleLogout();
-            } else {
+            // 401 já é tratado de forma centralizada pelo interceptor do axios
+            // (services/api.js): ele tenta renovar o token e, se não conseguir,
+            // desloga com aviso — evita duplicar essa lógica aqui.
+            if (error.response?.status !== 401) {
                 toast.error('Não foi possível carregar os agendamentos. Tente novamente.');
             }
         }
@@ -51,6 +51,14 @@ function App() {
         return () => clearTimeout(timeout);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [token, searchTerm]);
+
+    // Disparado pelo interceptor do axios (services/api.js) quando o access
+    // token expira e a renovação via refresh token também falha
+    useEffect(() => {
+        const handleAutoLogout = () => setToken(null);
+        window.addEventListener('auth:logout', handleAutoLogout);
+        return () => window.removeEventListener('auth:logout', handleAutoLogout);
+    }, []);
 
     // Fecha o menu lateral com a tecla Esc (acessibilidade de teclado)
     useEffect(() => {

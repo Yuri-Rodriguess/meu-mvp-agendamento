@@ -1,4 +1,12 @@
 import datetime
+import os
+
+# Os testes não devem depender de um .env real (nem existir no ambiente de
+# CI): definimos valores de teste antes de importar main.py, que lê essas
+# variáveis assim que o módulo é carregado.
+os.environ.setdefault("SECRET_KEY", "chave-de-teste-nao-use-em-producao")
+os.environ.setdefault("TEST_RUNNER_API_KEY", "chave-de-teste-run-tests")
+os.environ.setdefault("ALLOWED_ORIGINS", "http://localhost:5173")
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -108,3 +116,29 @@ def test_busca_agendamentos_por_nome_ou_servico():
 
     por_servico = client.get("/appointments/", params={"search": "corte"})
     assert any(a["service"] == "Corte de Cabelo" for a in por_servico.json())
+
+def test_login_devolve_access_e_refresh_token():
+    assert client.post("/register", json={"username": "refresh_tester", "password": "senha12345"}).status_code == 200
+
+    resposta_login = client.post("/login", data={"username": "refresh_tester", "password": "senha12345"})
+    assert resposta_login.status_code == 200
+    corpo = resposta_login.json()
+    assert "access_token" in corpo
+    assert "refresh_token" in corpo
+
+def test_refresh_token_gera_novo_access_token():
+    assert client.post("/register", json={"username": "refresh_tester_2", "password": "senha12345"}).status_code == 200
+    refresh_token = client.post("/login", data={"username": "refresh_tester_2", "password": "senha12345"}).json()["refresh_token"]
+
+    resposta_refresh = client.post("/refresh", json={"refresh_token": refresh_token})
+    assert resposta_refresh.status_code == 200
+    assert "access_token" in resposta_refresh.json()
+
+def test_refresh_rejeita_access_token_usado_no_lugar_do_refresh():
+    """Um access token não deve funcionar como refresh token, mesmo sendo
+    um JWT válido — a rota checa a claim "type" dentro do token."""
+    assert client.post("/register", json={"username": "refresh_tester_3", "password": "senha12345"}).status_code == 200
+    access_token = client.post("/login", data={"username": "refresh_tester_3", "password": "senha12345"}).json()["access_token"]
+
+    resposta_refresh = client.post("/refresh", json={"refresh_token": access_token})
+    assert resposta_refresh.status_code == 401

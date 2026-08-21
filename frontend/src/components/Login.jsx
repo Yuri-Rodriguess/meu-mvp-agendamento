@@ -23,11 +23,12 @@ export default function Login({ setToken }) {
                 params.append('password', password);
 
                 const response = await api.post('/login', params);
-                const token = response.data.access_token;
-                localStorage.setItem('token', token);
+                const { access_token, refresh_token } = response.data;
+                localStorage.setItem('token', access_token);
+                localStorage.setItem('refresh_token', refresh_token);
 
                 toast.success('Login realizado com sucesso!'); // Popup Verde!
-                setToken(token);
+                setToken(access_token);
             }
         } catch (error) {
             toast.error('Erro: ' + (error.response?.data?.detail || 'Falha de comunicação')); // Popup Vermelho!
