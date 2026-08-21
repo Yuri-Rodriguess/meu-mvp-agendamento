@@ -1,27 +1,27 @@
 import os
+import subprocess
+import sys
+from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
+
 from fastapi import FastAPI, Depends, Header, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import inspect, text
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from passlib.context import CryptContext
 from jose import JWTError, jwt
-from datetime import datetime, timedelta, timezone
-
-# Duração assumida de cada agendamento (o calendário do frontend também
-# desenha os eventos com 1h de duração — ver AppointmentList.jsx)
-DURACAO_AGENDAMENTO = timedelta(hours=1)
-import subprocess
-import sys
-from contextlib import asynccontextmanager
 from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
 
 import models
 import schemas
-from database import engine, SessionLocal
+from database import SessionLocal
 
 load_dotenv()
+
+# Duração assumida de cada agendamento (o calendário do frontend também
+# desenha os eventos com 1h de duração — ver AppointmentList.jsx)
+DURACAO_AGENDAMENTO = timedelta(hours=1)
 
 # Origens autorizadas a consumir a API (nunca usar "*" fora de um teste rápido local)
 ALLOWED_ORIGINS = [
@@ -33,24 +33,9 @@ ALLOWED_ORIGINS = [
 # Chave exigida para acionar o pipeline de testes via API (ver .env.example)
 TEST_RUNNER_API_KEY = os.getenv("TEST_RUNNER_API_KEY")
 
-# Cria as tabelas no banco de dados
-models.Base.metadata.create_all(bind=engine)
-
-
-def _garantir_coluna_owner_id():
-    """create_all() só cria tabelas novas — como 'appointments' já existia
-    antes da coluna owner_id ser adicionada, precisamos de uma migração
-    manual simples (o projeto não usa Alembic)."""
-    inspector = inspect(engine)
-    if "appointments" not in inspector.get_table_names():
-        return
-    colunas = [col["name"] for col in inspector.get_columns("appointments")]
-    if "owner_id" not in colunas:
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE appointments ADD COLUMN owner_id INTEGER REFERENCES users(id)"))
-
-
-_garantir_coluna_owner_id()
+# O schema do banco é criado/atualizado via Alembic (rode "alembic upgrade
+# head" antes de iniciar o servidor — veja README), não mais em tempo de
+# execução aqui. Isso substitui o antigo create_all() + ALTER TABLE manual.
 
 def tarefa_testes_diarios():
     """Função que o agendador vai executar sozinho no horário marcado"""

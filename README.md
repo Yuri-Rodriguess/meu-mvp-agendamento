@@ -9,7 +9,7 @@ Plataforma web responsiva para clínicas, salões e consultorias gerenciarem sua
 O projeto foi construído utilizando uma arquitetura moderna cliente-servidor:
 * **Frontend:** React, Vite, Axios, React Big Calendar (SPA com interface responsiva).
 * **Backend:** Python, FastAPI, SQLAlchemy, Pydantic (API RESTful de alta performance).
-* **Banco de Dados:** SQLite (Persistência leve e rápida para o MVP).
+* **Banco de Dados:** SQLite (Persistência leve e rápida para o MVP), com versionamento de schema via Alembic.
 * **Qualidade e Automação:** Pytest (Testes de integração) e APScheduler (Cron Jobs).
 
 ## ✨ Funcionalidades Entregues
@@ -43,6 +43,10 @@ cp .env.example .env
 python -c "import secrets; print(secrets.token_hex(32))"
 Cole o valor gerado em `SECRET_KEY` (usada para assinar os tokens de login) dentro de `backend/.env`. Faça o mesmo (com `token_hex(16)`) para `TEST_RUNNER_API_KEY`.
 
+Crie/atualize o banco de dados rodando as migrations (Alembic):
+alembic upgrade head
+> Se você já tinha um `agendamento.db` de antes desta mudança (schema já compatível com os models atuais), rode `alembic stamp head` uma única vez em vez de `upgrade head` — isso só marca o banco como atualizado, sem tentar recriar tabelas que já existem.
+
 Para iniciar o servidor de desenvolvimento: 
 python -m uvicorn main:app --reload 
 
@@ -65,6 +69,13 @@ Para iniciar a interface de usuário:
 npm run dev  
 
 ---
+
+## 🗄️ Alterando o schema do banco
+
+Sempre que mudar um model em `backend/models.py`, gere uma nova migration em vez de editar o banco na mão:
+alembic revision --autogenerate -m "descreva a mudança aqui"
+alembic upgrade head
+Revise o arquivo gerado em `backend/alembic/versions/` antes de commitar — o autogenerate nem sempre acerta 100% (ex.: renomear uma coluna vira "remover + adicionar" por padrão).
 
 ## 🔒 Notas de segurança
 
