@@ -9,13 +9,21 @@ export default function AppointmentForm({ onAppointmentAdded, editingAppointment
     const [clientName, setClientName] = useState(editingAppointment?.client_name ?? '');
     const [service, setService] = useState(editingAppointment?.service ?? '');
     const [dateTime, setDateTime] = useState(editingAppointment?.date_time.slice(0, 16) ?? ''); // "AAAA-MM-DDTHH:mm"
+    const [clientEmail, setClientEmail] = useState(editingAppointment?.client_email ?? '');
     const [saving, setSaving] = useState(false);
 
     const isEditing = Boolean(editingAppointment);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        const payload = { client_name: clientName, service: service, date_time: dateTime };
+        const payload = {
+            client_name: clientName,
+            service: service,
+            date_time: dateTime,
+            // Vazio vira null: o backend só aceita e-mail válido ou nenhum,
+            // nunca uma string vazia (violaria a validação de EmailStr)
+            client_email: clientEmail.trim() || null,
+        };
         setSaving(true);
         try {
             if (isEditing) {
@@ -30,6 +38,7 @@ export default function AppointmentForm({ onAppointmentAdded, editingAppointment
             setClientName('');
             setService('');
             setDateTime('');
+            setClientEmail('');
 
             if (onAppointmentAdded) {
                 onAppointmentAdded();
@@ -75,6 +84,15 @@ export default function AppointmentForm({ onAppointmentAdded, editingAppointment
                 value={dateTime}
                 onChange={e => setDateTime(e.target.value)}
                 required
+                className="form-field"
+            />
+            <label className="visually-hidden" htmlFor="appt-client-email">E-mail do cliente (opcional)</label>
+            <input
+                id="appt-client-email"
+                type="email"
+                placeholder="E-mail do cliente (opcional, envia confirmação)"
+                value={clientEmail}
+                onChange={e => setClientEmail(e.target.value)}
                 className="form-field"
             />
             <div style={{ display: 'flex', gap: '10px' }}>

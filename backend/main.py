@@ -4,7 +4,7 @@ import sys
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 
-from fastapi import FastAPI, Depends, Header, HTTPException, Query, Request, status
+from fastapi import BackgroundTasks, FastAPI, Depends, Header, HTTPException, Query, Request, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,6 +19,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
 import models
+import notifications
 import schemas
 from database import SessionLocal
 
@@ -254,13 +255,28 @@ def _tem_conflito_de_horario(db: Session, owner_id: int, date_time: datetime, ig
     )
 
 @app.post("/appointments/", response_model=schemas.AppointmentResponse)
-def create_appointment(appointment: schemas.AppointmentCreate, db: Session = Depends(get_db), current_user: models.UserDB = Depends(get_current_user)):
+def create_appointment(
+    appointment: schemas.AppointmentCreate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: models.UserDB = Depends(get_current_user),
+):
     if _tem_conflito_de_horario(db, current_user.id, appointment.date_time):
         raise HTTPException(status_code=409, detail="Já existe um agendamento seu nesse horário.")
     db_appointment = models.AppointmentDB(**appointment.model_dump(), owner_id=current_user.id)
     db.add(db_appointment)
     db.commit()
     db.refresh(db_appointment)
+    if db_appointment.client_email:
+        # Em background: o e-mail não deve atrasar a resposta da API nem
+        # fazer o agendamento falhar se o envio der problema.
+        background_tasks.add_task(
+            notifications.enviar_confirmacao_agendamento,
+            db_appointment.client_email,
+            db_appointment.client_name,
+            db_appointment.service,
+            db_appointment.date_time,
+        )
     return db_appointment
 
 @app.get("/appointments/", response_model=list[schemas.AppointmentResponse])
@@ -302,6 +318,7 @@ def update_appointment(
     db_appointment.client_name = appointment.client_name
     db_appointment.service = appointment.service
     db_appointment.date_time = appointment.date_time
+    db_appointment.client_email = appointment.client_email
     db.commit()
     db.refresh(db_appointment)
     return db_appointment

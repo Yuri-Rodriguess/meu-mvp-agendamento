@@ -82,10 +82,23 @@ def test_criar_agendamento_pipeline_ci():
         "date_time": agora
     }
     response = client.post("/appointments/", json=novo_agendamento)
-    
+
     # Garante que o item foi criado com sucesso (Status 200) e recebeu um ID
     assert response.status_code == 200
     assert "id" in response.json()
+
+def test_criar_agendamento_com_email_nao_quebra_mesmo_sem_smtp_configurado():
+    """O envio de e-mail roda em background e nunca deve impedir a criação
+    do agendamento, mesmo quando o SMTP não está configurado no ambiente
+    de teste (ver notifications.py e SMTP_* no .env.example)."""
+    resposta = client.post("/appointments/", json={
+        "client_name": "Cliente Com Email",
+        "service": "Corte",
+        "date_time": "2026-09-05T09:00:00",
+        "client_email": "cliente@teste.com",
+    })
+    assert resposta.status_code == 200
+    assert resposta.json()["client_email"] == "cliente@teste.com"
 
 def test_bloqueia_conflito_de_horario():
     """Não deve permitir dois agendamentos do mesmo usuário no mesmo horário"""

@@ -20,6 +20,7 @@ O projeto foi construído utilizando uma arquitetura moderna cliente-servidor:
 - [x] **Dashboard de CI/CD:** Tela dedicada no frontend que aciona e exibe logs do Pytest rodando no servidor em tempo real.
 - [x] **Rotina Autônoma (Background Task):** Agendador interno (APScheduler) configurado para executar testes automáticos de integridade todos os dias às 22h.
 - [x] **CI real (GitHub Actions):** todo push/PR roda o Pytest do backend e o lint + testes + build do frontend automaticamente — o dashboard e o agendador continuam existindo, mas quem garante que a branch está saudável agora é o CI, não um clique manual.
+- [x] **E-mail de confirmação (opcional):** se o cliente tiver e-mail cadastrado no agendamento, recebe uma confirmação automática assim que ele é criado (requer configurar um SMTP — ver `.env.example`; sem isso, o app funciona normal e só não manda o e-mail).
 
 ---
 
@@ -107,3 +108,7 @@ O projeto ainda não está publicado — isso exige criar contas em serviços de
 - Os testes automatizados (`pytest`) rodam contra um banco SQLite isolado (`test_agendamento.db`), não contra `agendamento.db` — assim o pipeline de CI não insere dados fictícios no banco real.
 - `/login` e `/register` têm rate limiting por IP (10 e 5 requisições por minuto, respectivamente), para dificultar ataques de força bruta contra senha. Ao estourar o limite, a API responde `429`.
 - O access token dura só 30 minutos. `/login` também devolve um refresh token (7 dias); o frontend usa `/refresh` para renovar o access token silenciosamente quando ele expira, sem pedir login de novo. Se o refresh token também estiver inválido/expirado, o usuário é deslogado com aviso.
+
+## 📧 E-mail de confirmação
+
+Não usamos nenhum serviço de terceiros pago — o envio é feito por SMTP puro (`smtplib`, já vem no Python). Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD` e `SMTP_FROM_EMAIL` em `backend/.env` (veja o `.env.example` para um exemplo usando Gmail). Sem essas variáveis, o app roda normalmente e apenas registra no log que pulou o envio — nunca falha a criação do agendamento por causa de e-mail. Só cobre e-mail por enquanto; SMS ficaria por conta de um serviço de terceiros (Twilio e similares), que exige uma conta e número próprios — não incluído aqui.

@@ -57,9 +57,27 @@ describe('AppointmentForm', () => {
             client_name: 'Cliente Teste',
             service: 'Barba',
             date_time: '2026-09-10T10:00',
+            client_email: null,
         }));
         expect(toast.success).toHaveBeenCalled();
         expect(onAppointmentAdded).toHaveBeenCalled();
+    });
+
+    it('envia o e-mail do cliente quando preenchido', async () => {
+        api.post.mockResolvedValueOnce({ data: { id: 1 } });
+        const user = userEvent.setup();
+
+        render(<AppointmentForm onAppointmentAdded={vi.fn()} />);
+
+        await user.type(screen.getByLabelText(/nome do cliente/i), 'Cliente Teste');
+        await user.type(screen.getByLabelText(/serviço/i), 'Barba');
+        await user.type(screen.getByLabelText(/data e horário/i), '2026-09-10T10:00');
+        await user.type(screen.getByLabelText(/e-mail do cliente/i), 'cliente@teste.com');
+        await user.click(screen.getByRole('button', { name: /agendar horário/i }));
+
+        await waitFor(() => expect(api.post).toHaveBeenCalledWith('/appointments/', expect.objectContaining({
+            client_email: 'cliente@teste.com',
+        })));
     });
 
     it('mostra o aviso de conflito de horário quando a API responde 409', async () => {

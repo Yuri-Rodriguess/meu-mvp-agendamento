@@ -1,10 +1,13 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, EmailStr
 from datetime import datetime
 
 class AppointmentCreate(BaseModel):
     client_name: str
     service: str
     date_time: datetime
+    # Opcional: se informado, o cliente recebe um e-mail de confirmação
+    # (ver backend/notifications.py e a variável SMTP_HOST no .env.example)
+    client_email: EmailStr | None = None
 
 class AppointmentResponse(AppointmentCreate):
     id: int

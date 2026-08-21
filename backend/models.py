@@ -12,6 +12,9 @@ class AppointmentDB(Base):
     # conta. Fica anulável só para não quebrar linhas criadas antes
     # desta migração; agendamentos novos sempre têm dono.
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    # Opcional: se preenchido, dispara um e-mail de confirmação (ver
+    # notifications.py). Sem e-mail, o agendamento funciona normalmente.
+    client_email = Column(String, nullable=True)
 
 class UserDB(Base):
     __tablename__ = "users"

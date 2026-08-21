@@ -156,7 +156,11 @@ export default function AppointmentList({ appointments, onAppointmentDeleted, on
                     {appointments.map((appt) => (
                         <li key={appt.id} style={{ padding: '15px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
                             <div>
-                                <strong>{appt.client_name}</strong> - {appt.service} <br/>
+                                <strong>{appt.client_name}</strong> - {appt.service}
+                                {appt.client_email && (
+                                    <span title={`Confirmação enviada para ${appt.client_email}`} aria-label={`E-mail cadastrado: ${appt.client_email}`}> 📧</span>
+                                )}
+                                <br/>
                                 <span style={{ color: '#666' }}>{new Date(appt.date_time).toLocaleString('pt-BR')}</span>
                             </div>
                             <div style={{ display: 'flex', gap: '8px' }}>
