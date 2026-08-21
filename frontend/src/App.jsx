@@ -5,6 +5,7 @@ import AppointmentList from './components/AppointmentList';
 import Login from './components/Login';
 import './App.css';
 import UserList from './components/UserList';
+import { toast } from 'react-toastify';
 
 function App() {
 
@@ -27,9 +28,12 @@ function App() {
             setAppointments(response.data);
         } catch (error) {
             console.error("Erro ao buscar agendamentos", error);
-            // Se o token estiver vencido ou inválido, desloga automaticamente
+            // Se o token estiver vencido ou inválido, avisa e desloga automaticamente
             if (error.response && error.response.status === 401) {
+                toast.error('Sua sessão expirou. Faça login novamente.');
                 handleLogout();
+            } else {
+                toast.error('Não foi possível carregar os agendamentos. Tente novamente.');
             }
         }
     };
@@ -155,6 +159,7 @@ function App() {
                                         console.error("Erro na integração", e);
                                         document.getElementById('terminal-testes').innerText = "Falha ao conectar com o Backend.";
                                         setTestStatus('falha');
+                                        toast.error(e.response?.data?.detail || 'Falha ao conectar com o backend para rodar os testes.');
                                     }
                                 }}
                                 style={{ padding: '10px 20px', backgroundColor: '#007BFF', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}

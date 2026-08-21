@@ -12,7 +12,7 @@ const getLoggedUsername = () => {
         const decodedJson = atob(payloadBase64); // Decodifica a base64
         const payload = JSON.parse(decodedJson);
         return payload.sub; // No FastAPI, salvamos o username no campo "sub"
-    } catch (e) {
+    } catch {
         return null;
     }
 };
@@ -30,7 +30,7 @@ export default function UserList() {
                 const response = await api.get('/users/');
                 setUsers(response.data);
             } catch (error) {
-                toast.error("Erro ao carregar a lista de administradores.");
+                toast.error(error.response?.data?.detail || "Erro ao carregar a lista de administradores.");
             }
         };
         fetchUsers();
